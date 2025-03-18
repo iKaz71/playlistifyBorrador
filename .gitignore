@@ -1,0 +1,18 @@
+# Archivos y carpetas de compilación
+/build/
+.gradle/
+.idea/
+*.iml
+
+# Configuración local
+local.properties
+
+# Archivos de caché del sistema
+.DS_Store
+*.log
+
+# Archivos de empaquetado
+*.jar
+*.zip
+*.war
+*.ear
