@@ -9,8 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlin.random.Random
+import com.google.firebase.database.FirebaseDatabase
 
 @Composable
 fun HostScreen(navController: NavController) {
@@ -21,9 +20,26 @@ fun HostScreen(navController: NavController) {
     ) {
         Text(text = "🌟 Pantalla del Anfitrión 🌟", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { navController.popBackStack() }) {
+        val context = LocalContext.current
+        val db = FirebaseDatabase.getInstance()
+
+        Button(onClick = {
+            val codigo = generarCodigoSala()
+            crearSalaEnRealtimeDB(codigo) {
+                Toast.makeText(context, "Sala $codigo creada", Toast.LENGTH_SHORT).show()
+            }
+        }) {
+            Text("🎉 Crear Sala")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = {
+            navController.popBackStack()
+        }) {
             Text("🔙 Volver")
         }
+
     }
 }
 
@@ -32,15 +48,17 @@ fun generarCodigoSala(): String {
     return (1000..9999).random().toString()
 }
 
-// Función para crear la sala en Firebase
-fun crearSalaEnFirebase(db: FirebaseFirestore, codigo: String, onSuccess: () -> Unit) {
-    val sala = hashMapOf(
-        "anfitrion" to "USER_ID",  // Aquí puedes poner el ID real del anfitrión
+
+fun crearSalaEnRealtimeDB(codigo: String, onSuccess: () -> Unit) {
+    val sala = mapOf(
+        "anfitrion" to "USER_ID",
         "estado" to "activo",
         "videos" to emptyList<Map<String, Any>>() // Lista vacía inicialmente
     )
 
-    db.collection("salas").document(codigo)
-        .set(sala)
+    val db = FirebaseDatabase.getInstance()
+    db.getReference("salas").child(codigo).setValue(sala)
         .addOnSuccessListener { onSuccess() }
 }
+
+

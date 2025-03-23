@@ -57,6 +57,12 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("androidx.navigation:navigation-compose:2.7.5")
-    implementation("com.google.firebase:firebase-firestore-ktx:24.10.0") // Última versión de Firestore
-    implementation("com.google.firebase:firebase-auth-ktx:22.1.2")
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.database)
+
+
 }
+
+apply(plugin = "com.google.gms.google-services")
+
