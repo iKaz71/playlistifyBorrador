@@ -80,6 +80,17 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
 
+    //Cast
+    implementation("androidx.appcompat:appcompat:1.3.1")
+    implementation("androidx.mediarouter:mediarouter:1.2.5")
+
+    implementation("com.google.android.gms:play-services-cast-framework:21.3.0")
+    implementation("androidx.mediarouter:mediarouter:1.6.0")
+    implementation ("com.google.android.material:material:1.11.0")
+
+
+
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -88,6 +99,8 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+
 }
 
 apply(plugin = "com.google.gms.google-services")

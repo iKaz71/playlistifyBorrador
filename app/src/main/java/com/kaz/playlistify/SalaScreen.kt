@@ -21,19 +21,109 @@ import coil.compose.rememberAsyncImagePainter
 import com.kaz.playlistify.YouTubeApi
 import com.kaz.playlistify.VideoItem
 
-data class Cancion(val id: String, val titulo: String, val usuario: String, val thumbnailUrl: String)
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.cast.framework.CastContext
+
+import com.google.android.gms.cast.framework.media.RemoteMediaClient
+import com.google.android.gms.common.images.WebImage
+import android.net.Uri
+import androidx.mediarouter.app.MediaRouteButton
+import androidx.mediarouter.media.MediaRouteSelector
+import com.google.android.gms.cast.CastMediaControlIntent
+import androidx.compose.ui.viewinterop.AndroidView
+import android.view.ContextThemeWrapper
+import androidx.fragment.app.FragmentActivity
+import androidx.mediarouter.app.MediaRouteChooserDialogFragment
+import com.google.android.material.R as MaterialR
+import com.kaz.playlistify.CustomMediaRouteChooserDialogFragment
+
+
+
+
+data class Cancion(
+    val id: String,
+    val titulo: String,
+    val usuario: String,
+    val thumbnailUrl: String
+)
+
+fun mostrarCastDialog(activity: FragmentActivity) {
+    val selector = MediaRouteSelector.Builder()
+        .addControlCategory(
+            CastMediaControlIntent.categoryForCast(
+                CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID
+            )
+        ).build()
+
+    val dialogFragment = CustomMediaRouteChooserDialogFragment().apply {
+        routeSelector = selector
+    }
+
+
+    dialogFragment.show(activity.supportFragmentManager, "cast-dialog")
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
     val cancionesEnCola = remember {
         mutableStateListOf(
-            Cancion("1", "Canción 1", "usuarioA", "https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg"),
-            Cancion("2", "Canción 2", "usuarioB", "https://img.youtube.com/vi/3JZ_D3ELwOQ/0.jpg")
+            Cancion("d8ekz_CSBVg", "Three Days Grace - I Hate Everything About You", "usuarioA", "https://img.youtube.com/vi/d8ekz_CSBVg/0.jpg"),
+            Cancion("3YxaaGgTQYM", "Evanescence - Bring Me To Life", "usuarioB", "https://img.youtube.com/vi/3YxaaGgTQYM/0.jpg"),
+            Cancion("kXYiU_JCYtU", "Linkin Park - Numb", "usuarioC", "https://img.youtube.com/vi/kXYiU_JCYtU/0.jpg"),
+            Cancion("YlUKcNNmywk", "Red Hot Chili Peppers - Californication", "usuarioD", "https://img.youtube.com/vi/YlUKcNNmywk/0.jpg"),
+            Cancion("gGdGFtwCNBE", "The Killers - Mr. Brightside", "usuarioE", "https://img.youtube.com/vi/gGdGFtwCNBE/0.jpg")
+
         )
     }
 
     val openSheet = remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val currentIndex = remember { mutableIntStateOf(0) }
+
+    fun reproducirEnCast(cancion: Cancion) {
+        val castSession = CastContext.getSharedInstance(context).sessionManager.currentCastSession
+
+        val remoteMediaClient = castSession?.remoteMediaClient
+
+        if (remoteMediaClient != null) {
+            val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
+                putString(MediaMetadata.KEY_TITLE, cancion.titulo)
+                addImage(com.google.android.gms.common.images.WebImage(android.net.Uri.parse(cancion.thumbnailUrl)))
+            }
+
+            val videoUrl = "https://www.youtube.com/watch?v=${cancion.id}" // Este es informativo, YouTube no permite cast directo
+
+            val mediaInfo = MediaInfo.Builder(videoUrl)
+                .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+                .setContentType("video/mp4") // simulación
+                .setMetadata(metadata)
+                .build()
+
+            remoteMediaClient.load(mediaInfo, true, 0)
+
+            remoteMediaClient.registerCallback(object : com.google.android.gms.cast.framework.media.RemoteMediaClient.Callback() {
+                override fun onStatusUpdated() {
+                    val status = remoteMediaClient.playerState
+                    if (status == com.google.android.gms.cast.MediaStatus.PLAYER_STATE_IDLE) {
+                        val siguiente = currentIndex.intValue + 1
+                        if (siguiente < cancionesEnCola.size) {
+                            currentIndex.intValue = siguiente
+                            reproducirEnCast(cancionesEnCola[siguiente])
+                        }
+                    }
+                }
+            })
+        } else {
+            Log.e("SalaScreen", "No hay una sesión de Cast activa")
+        }
+    }
+
+
+    val castContext = remember { CastContext.getSharedInstance(context) }
+    val castSession = castContext.sessionManager.currentCastSession
 
     Scaffold(
         topBar = {
@@ -61,6 +151,7 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
         ) {
             Text("Reproduciendo ahora:", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painter = rememberAsyncImagePainter("https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg"),
@@ -69,14 +160,35 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
                     modifier = Modifier.size(100.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
+
                 Column {
-                    Text("Rick Astley - Never Gonna Give You Up", maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("https://youtube.com/watch?v=dQw4w9WgXcQ", style = MaterialTheme.typography.bodySmall)
-                    if (esAnfitrion) {
-                        Button(onClick = { /* TODO: Enviar a Chromecast */ }) {
+                    Text(
+                        "Rick Astley - Never Gonna Give You Up",
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        "https://youtube.com/watch?v=dQw4w9WgXcQ",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    val context = LocalContext.current
+                    val activity = context as? FragmentActivity
+
+                    if (esAnfitrion && activity != null) {
+                        Button(
+                            onClick = {
+                                mostrarCastDialog(activity)
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
                             Text("Enviar a Chromecast")
                         }
                     }
+
+
+
+
                 }
             }
 
@@ -113,6 +225,7 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
         }
     }
 
+    // BottomSheet para búsqueda
     if (openSheet.value) {
         ModalBottomSheet(
             onDismissRequest = { openSheet.value = false },
