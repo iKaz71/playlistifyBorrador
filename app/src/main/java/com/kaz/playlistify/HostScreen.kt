@@ -27,10 +27,12 @@ fun HostScreen(navController: NavController) {
             val codigo = generarCodigoSala()
             crearSalaEnRealtimeDB(codigo) {
                 Toast.makeText(context, "Sala $codigo creada", Toast.LENGTH_SHORT).show()
+                navController.navigate("sala/$codigo") // Navega a SalaScreen con el código
             }
         }) {
             Text("🎉 Crear Sala")
         }
+
 
         Spacer(modifier = Modifier.height(16.dp))
 
