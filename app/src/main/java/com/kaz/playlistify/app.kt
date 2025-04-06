@@ -12,6 +12,6 @@ class App : Application() {
         FirebaseApp.initializeApp(this)
 
         // Inicializa Google Cast con Executor válido
-        CastContext.getSharedInstance(this, Executors.newSingleThreadExecutor())
+        CastContext.getSharedInstance(this)
     }
 }
