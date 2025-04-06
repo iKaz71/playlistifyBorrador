@@ -24,19 +24,15 @@ import com.kaz.playlistify.VideoItem
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaMetadata
 import com.google.android.gms.cast.framework.CastContext
-
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
 import com.google.android.gms.cast.framework.media.RemoteMediaClient
-import com.google.android.gms.common.images.WebImage
 import android.net.Uri
-import androidx.mediarouter.app.MediaRouteButton
+import androidx.fragment.app.FragmentActivity
 import androidx.mediarouter.media.MediaRouteSelector
 import com.google.android.gms.cast.CastMediaControlIntent
-import androidx.compose.ui.viewinterop.AndroidView
-import android.view.ContextThemeWrapper
-import androidx.fragment.app.FragmentActivity
-import androidx.mediarouter.app.MediaRouteChooserDialogFragment
-import com.google.android.material.R as MaterialR
 import com.kaz.playlistify.CustomMediaRouteChooserDialogFragment
+import com.google.android.gms.common.images.WebImage as GmsWebImage
 
 
 
@@ -49,20 +45,16 @@ data class Cancion(
 )
 
 fun mostrarCastDialog(activity: FragmentActivity) {
-    val selector = MediaRouteSelector.Builder()
-        .addControlCategory(
-            CastMediaControlIntent.categoryForCast(
-                CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID
-            )
-        ).build()
+    val castContext = CastContext.getSharedInstance(activity)
+    val selector = castContext.mergedSelector!! // ← uso el selector real
 
     val dialogFragment = CustomMediaRouteChooserDialogFragment().apply {
         routeSelector = selector
     }
 
-
     dialogFragment.show(activity.supportFragmentManager, "cast-dialog")
 }
+
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,7 +67,6 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
             Cancion("kXYiU_JCYtU", "Linkin Park - Numb", "usuarioC", "https://img.youtube.com/vi/kXYiU_JCYtU/0.jpg"),
             Cancion("YlUKcNNmywk", "Red Hot Chili Peppers - Californication", "usuarioD", "https://img.youtube.com/vi/YlUKcNNmywk/0.jpg"),
             Cancion("gGdGFtwCNBE", "The Killers - Mr. Brightside", "usuarioE", "https://img.youtube.com/vi/gGdGFtwCNBE/0.jpg")
-
         )
     }
 
@@ -83,60 +74,87 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
     val context = LocalContext.current
     val currentIndex = remember { mutableIntStateOf(0) }
 
-    fun reproducirEnCast(cancion: Cancion) {
+    fun reproducirEnCast() {
         val castSession = CastContext.getSharedInstance(context).sessionManager.currentCastSession
-
         val remoteMediaClient = castSession?.remoteMediaClient
 
         if (remoteMediaClient != null) {
             val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
-                putString(MediaMetadata.KEY_TITLE, cancion.titulo)
-                addImage(com.google.android.gms.common.images.WebImage(android.net.Uri.parse(cancion.thumbnailUrl)))
+                putString(MediaMetadata.KEY_TITLE, "Big Buck Bunny")
             }
 
-            val videoUrl = "https://www.youtube.com/watch?v=${cancion.id}" // Este es informativo, YouTube no permite cast directo
+            val videoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
 
             val mediaInfo = MediaInfo.Builder(videoUrl)
                 .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
-                .setContentType("video/mp4") // simulación
+                .setContentType("video/mp4")
                 .setMetadata(metadata)
                 .build()
 
             remoteMediaClient.load(mediaInfo, true, 0)
-
-            remoteMediaClient.registerCallback(object : com.google.android.gms.cast.framework.media.RemoteMediaClient.Callback() {
-                override fun onStatusUpdated() {
-                    val status = remoteMediaClient.playerState
-                    if (status == com.google.android.gms.cast.MediaStatus.PLAYER_STATE_IDLE) {
-                        val siguiente = currentIndex.intValue + 1
-                        if (siguiente < cancionesEnCola.size) {
-                            currentIndex.intValue = siguiente
-                            reproducirEnCast(cancionesEnCola[siguiente])
-                        }
-                    }
-                }
-            })
         } else {
             Log.e("SalaScreen", "No hay una sesión de Cast activa")
         }
     }
 
 
+
     val castContext = remember { CastContext.getSharedInstance(context) }
-    val castSession = castContext.sessionManager.currentCastSession
+    val sessionManager = castContext.sessionManager
+
+    DisposableEffect(Unit) {
+        val sessionListener = object : SessionManagerListener<CastSession> {
+
+            override fun onSessionStarted(session: CastSession, sessionId: String) {
+                Log.d("Cast", "Sesión iniciada")
+                // if (cancionesEnCola.isNotEmpty()) {
+                //     reproducirEnCast(cancionesEnCola[currentIndex.intValue])
+                // }
+                reproducirEnCast() // ← ahora usas la nueva sin parámetros
+            }
+
+            override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
+                Log.d("Cast", "Sesión reanudada")
+                // if (cancionesEnCola.isNotEmpty()) {
+                //     reproducirEnCast(cancionesEnCola[currentIndex.intValue])
+                // }
+                reproducirEnCast() // ← ahora usas la nueva sin parámetros
+            }
+
+
+            override fun onSessionEnded(session: CastSession, error: Int) {
+                Log.d("Cast", "Sesión terminada")
+            }
+
+            override fun onSessionResumeFailed(session: CastSession, error: Int) {}
+            override fun onSessionStartFailed(session: CastSession, error: Int) {}
+            override fun onSessionStarting(session: CastSession) {}
+            override fun onSessionEnding(session: CastSession) {}
+            override fun onSessionSuspended(session: CastSession, reason: Int) {}
+            override fun onSessionResuming(session: CastSession, sessionId: String) {}
+            //override fun onSessionStarting(session: CastSession, sessionId: String) {}
+        }
+
+
+        sessionManager.addSessionManagerListener(sessionListener, CastSession::class.java)
+
+        onDispose {
+            sessionManager.removeSessionManagerListener(sessionListener, CastSession::class.java)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Playlistify") },
                 actions = {
-                    IconButton(onClick = { /* TODO: Peticiones de ingreso */ }) {
+                    IconButton(onClick = { }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notificaciones")
                     }
                     IconButton(onClick = { openSheet.value = true }) {
                         Icon(Icons.Default.Search, contentDescription = "Buscar")
                     }
-                    IconButton(onClick = { /* TODO: Perfil */ }) {
+                    IconButton(onClick = { }) {
                         Icon(Icons.Default.AccountCircle, contentDescription = "Cuenta")
                     }
                 }
@@ -162,33 +180,19 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column {
-                    Text(
-                        "Rick Astley - Never Gonna Give You Up",
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        "https://youtube.com/watch?v=dQw4w9WgXcQ",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Text("Rick Astley - Never Gonna Give You Up", maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("https://youtube.com/watch?v=dQw4w9WgXcQ", style = MaterialTheme.typography.bodySmall)
 
-                    val context = LocalContext.current
                     val activity = context as? FragmentActivity
 
                     if (esAnfitrion && activity != null) {
                         Button(
-                            onClick = {
-                                mostrarCastDialog(activity)
-                            },
+                            onClick = { mostrarCastDialog(activity) },
                             modifier = Modifier.padding(top = 8.dp)
                         ) {
                             Text("Enviar a Chromecast")
                         }
                     }
-
-
-
-
                 }
             }
 
@@ -203,9 +207,7 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
                     items(cancionesEnCola) { cancion ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                         ) {
                             Image(
                                 painter = rememberAsyncImagePainter(cancion.thumbnailUrl),
@@ -225,7 +227,6 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
         }
     }
 
-    // BottomSheet para búsqueda
     if (openSheet.value) {
         ModalBottomSheet(
             onDismissRequest = { openSheet.value = false },
@@ -252,12 +253,8 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
                     onClick = {
                         YouTubeApi.buscarVideos(
                             query = query,
-                            onResult = { videos ->
-                                results = videos.take(3)
-                            },
-                            onError = { e ->
-                                Log.e("SalaScreen", "Error al buscar: ${e.message}")
-                            }
+                            onResult = { videos -> results = videos.take(3) },
+                            onError = { e -> Log.e("SalaScreen", "Error al buscar: ${e.message}") }
                         )
                     },
                     modifier = Modifier.align(Alignment.End)
@@ -270,9 +267,7 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
                 results.forEach { video ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                     ) {
                         Image(
                             painter = rememberAsyncImagePainter(video.thumbnailUrl),
@@ -284,12 +279,7 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
                             Text(video.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Button(onClick = {
                                 cancionesEnCola.add(
-                                    Cancion(
-                                        id = video.id,
-                                        titulo = video.title,
-                                        usuario = "Tú",
-                                        thumbnailUrl = video.thumbnailUrl
-                                    )
+                                    Cancion(video.id, video.title, "Tú", video.thumbnailUrl)
                                 )
                                 openSheet.value = false
                             }) {
