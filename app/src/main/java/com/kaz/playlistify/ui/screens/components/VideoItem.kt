@@ -1,4 +1,4 @@
-package com.kaz.playlistify
+package com.kaz.playlistify.ui.screens.components
 
 data class VideoItem(
     val id: String,

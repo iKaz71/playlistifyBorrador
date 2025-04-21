@@ -1,4 +1,4 @@
-package com.kaz.playlistify
+package com.kaz.playlistify.model
 
 data class YouTubeSearchResponse(
     val items: List<Item>
