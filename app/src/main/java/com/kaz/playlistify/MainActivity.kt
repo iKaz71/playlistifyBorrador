@@ -1,14 +1,12 @@
 package com.kaz.playlistify
 
+import android.Manifest
 import android.os.Bundle
-import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.core.app.ActivityCompat
+import androidx.fragment.app.FragmentActivity
 import com.google.firebase.FirebaseApp
 import com.kaz.playlistify.ui.theme.AppNavigation
-import android.Manifest
-import com.google.android.gms.cast.framework.CastContext
-
 
 class MainActivity : FragmentActivity() {
 
@@ -20,26 +18,19 @@ class MainActivity : FragmentActivity() {
         ActivityCompat.requestPermissions(this, permisos, 1)
     }
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Primero inicializo Firebase
+        // Inicializa Firebase
         FirebaseApp.initializeApp(this)
 
-        // Ahora me aseguro de inicializar CastContext correctamente
-        CastContext.getSharedInstance(this)
 
-        // Solicito permisos de ubicación
+        // Permisos de ubicación (opcional si no lo necesitas)
         solicitarPermisosUbicacion()
 
-        // Finalmente, cargo el contenido de Compose
+        // Carga la UI
         setContent {
             AppNavigation()
         }
     }
-
-
-
-
 }

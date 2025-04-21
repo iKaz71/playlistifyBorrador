@@ -1,7 +1,10 @@
-package com.kaz.playlistify
+package com.kaz.playlistify.network.youtube
 
 import android.util.Log
 import com.google.gson.Gson
+import com.kaz.playlistify.BuildConfig
+import com.kaz.playlistify.model.YouTubeSearchResponse
+import com.kaz.playlistify.ui.screens.components.VideoItem
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
