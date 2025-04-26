@@ -20,7 +20,7 @@ fun RoleSelectionScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(onClick = {
-            navController.navigate("hostScreen") // Asegúrate de que el nombre coincide con AppNavigation.kt
+            navController.navigate("hostScreen")
         }) {
             Text(text = "🎤 Soy Anfitrión")
         }
@@ -28,7 +28,7 @@ fun RoleSelectionScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Button(onClick = {
-            navController.navigate("joinScreen") // Asegúrate de que el nombre coincide con AppNavigation.kt
+            navController.navigate("joinScreen")
         }) {
             Text(text = "🎧 Soy Invitado")
         }

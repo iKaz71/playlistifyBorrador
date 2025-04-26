@@ -1,4 +1,4 @@
-package com.kaz.playlistify.ui
+package com.kaz.playlistify.ui.screens.common
 
 import android.util.Log
 import androidx.compose.foundation.Image
@@ -18,32 +18,30 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
+import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.network.youtube.YouTubeApi
 import com.kaz.playlistify.ui.screens.components.VideoItem
-
-/**
- * Representación de una canción en la cola.
- */
-data class Cancion(
-    val id: String,
-    val titulo: String,
-    val usuario: String,
-    val thumbnailUrl: String
-)
+import com.kaz.playlistify.util.SessionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
-    val cancionesEnCola = remember {
-        mutableStateListOf(
-            Cancion("hTWKbfoikeg", "Nirvana - Smells Like Teen Spirit", "anfitrión", "https://img.youtube.com/vi/hTWKbfoikeg/0.jpg"),
-            Cancion("Ckom3gf57Yw", "Muse - Uprising", "anfitrión", "https://img.youtube.com/vi/Ckom3gf57Yw/0.jpg"),
-            Cancion("ktvTqknDobU", "Linkin Park - Burn It Down", "anfitrión", "https://img.youtube.com/vi/ktvTqknDobU/0.jpg")
-        )
-    }
-
+fun SalaScreen(sessionId: String) {
+    val cancionesEnCola = remember { mutableStateListOf<Cancion>() }
     val openSheet = remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val currentVideo = remember { mutableStateOf<Cancion?>(null) }
+
+    // Carga inicial simulada de canciones
+    LaunchedEffect(Unit) {
+        cancionesEnCola.addAll(
+            listOf(
+                Cancion("hTWKbfoikeg", "Nirvana - Smells Like Teen Spirit", "anfitrión", "https://img.youtube.com/vi/hTWKbfoikeg/0.jpg"),
+                Cancion("Ckom3gf57Yw", "Muse - Uprising", "anfitrión", "https://img.youtube.com/vi/Ckom3gf57Yw/0.jpg"),
+                Cancion("ktvTqknDobU", "Linkin Park - Burn It Down", "invitado", "https://img.youtube.com/vi/ktvTqknDobU/0.jpg")
+            )
+        )
+        currentVideo.value = cancionesEnCola.firstOrNull()
+    }
 
     Scaffold(
         topBar = {
@@ -72,18 +70,19 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
             Text("Reproduciendo ahora:", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = rememberAsyncImagePainter("https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg"),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(100.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text("Rick Astley - Never Gonna Give You Up", maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("https://youtube.com/watch?v=dQw4w9WgXcQ", style = MaterialTheme.typography.bodySmall)
+            currentVideo.value?.let { video ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        painter = rememberAsyncImagePainter(video.thumbnailUrl),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(100.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(video.titulo, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("https://youtube.com/watch?v=${video.id}", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
 
@@ -120,6 +119,7 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
         }
     }
 
+    //  BottomSheet para buscar canciones
     if (openSheet.value) {
         ModalBottomSheet(
             onDismissRequest = { openSheet.value = false },
@@ -183,6 +183,25 @@ fun SalaScreen(codigoSala: String, esAnfitrion: Boolean = false) {
                         }
                     }
                 }
+
+
+                val context = LocalContext.current
+
+
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+
+                Button(
+                    onClick = {
+                        SessionManager.limpiarSesion(context)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("🧹 Limpiar sesión (Debug)")
+                }
+
             }
         }
     }

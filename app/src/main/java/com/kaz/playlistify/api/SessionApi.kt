@@ -1,7 +1,8 @@
 package com.kaz.playlistify.api
 
-import com.kaz.playlistify.model.SessionResponse
 import com.kaz.playlistify.model.SessionCreateResponse
+import com.kaz.playlistify.model.SessionResponse
+import com.kaz.playlistify.model.SessionVerifyResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -13,4 +14,7 @@ interface SessionApi {
 
     @POST("session/create")
     suspend fun createSession(@Body body: Map<String, String>): SessionCreateResponse
+
+    @POST("session/verify")
+    suspend fun verifyCode(@Body body: Map<String, String>): SessionVerifyResponse
 }
