@@ -12,6 +12,7 @@ import androidx.navigation.NavController
 import com.kaz.playlistify.api.RetrofitInstance
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,22 +57,27 @@ fun JoinSessionScreen(navController: NavController) {
                 onClick = {
                     coroutineScope.launch(Dispatchers.IO) {
                         try {
-                            isLoading = true
-                            errorMessage = null
+                            withContext(Dispatchers.Main) {
+                                isLoading = true
+                                errorMessage = null
+                            }
 
                             val response = RetrofitInstance.sessionApi.verifyCode(mapOf("code" to code))
-
-
                             Log.d("JoinSession", "✅ Código válido, sessionId: ${response.sessionId}")
 
-                            // Navegar a la sala
-                            navController.navigate("sala/${response.sessionId}")
+                            withContext(Dispatchers.Main) {
+                                navController.navigate("sala/${response.sessionId}")
+                            }
 
                         } catch (e: Exception) {
                             Log.e("JoinSession", "❌ Error verificando código", e)
-                            errorMessage = "Código inválido o error de red"
+                            withContext(Dispatchers.Main) {
+                                errorMessage = "Código inválido o error de red"
+                            }
                         } finally {
-                            isLoading = false
+                            withContext(Dispatchers.Main) {
+                                isLoading = false
+                            }
                         }
                     }
                 },
