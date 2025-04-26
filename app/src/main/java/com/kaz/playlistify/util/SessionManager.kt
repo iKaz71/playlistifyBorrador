@@ -3,7 +3,9 @@ package com.kaz.playlistify.util
 import android.content.Context
 import android.util.Log
 import com.kaz.playlistify.api.RetrofitInstance
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
 object SessionManager {
@@ -21,18 +23,16 @@ object SessionManager {
             return
         }
 
-        // Usamos una corrutina para poder llamar funciones suspend
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = RetrofitInstance.sessionApi.createSession(mapOf("uid" to uid))
                 val sessionId = response.sessionId
 
-                prefs.edit().putString(SESSION_ID_KEY, sessionId).apply()
+                guardarSessionId(context, sessionId)
+
                 Log.d("SessionManager", "🎉 Sesión creada: $sessionId")
 
-                withContext(Dispatchers.Main) {
-                    onResult(sessionId)
-                }
+                onResult(sessionId)
             } catch (e: HttpException) {
                 Log.e("SessionManager", "❌ Error HTTP creando sesión", e)
             } catch (e: Exception) {
@@ -41,14 +41,20 @@ object SessionManager {
         }
     }
 
-    fun limpiarSesion(context: Context) {
+    fun guardarSessionId(context: Context, sessionId: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().remove(SESSION_ID_KEY).apply()
-        Log.d("SessionManager", "🧹 Sesión eliminada")
+        prefs.edit().putString(SESSION_ID_KEY, sessionId).apply()
+        Log.d("SessionManager", "💾 sessionId guardado: $sessionId")
     }
 
     fun obtenerSessionIdGuardado(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getString(SESSION_ID_KEY, null)
+    }
+
+    fun limpiarSesion(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().remove(SESSION_ID_KEY).apply()
+        Log.d("SessionManager", "🧹 Sesión eliminada")
     }
 }

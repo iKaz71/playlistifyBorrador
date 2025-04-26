@@ -25,10 +25,10 @@ class MainActivity : FragmentActivity() {
         FirebaseApp.initializeApp(this)
 
 
-        // Permisos de ubicación (opcional si no lo necesitas)
+        // Permisos de ubicación
         solicitarPermisosUbicacion()
 
-        // Carga la UI
+
         setContent {
             AppNavigation()
         }
