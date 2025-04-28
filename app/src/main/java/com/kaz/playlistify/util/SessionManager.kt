@@ -26,13 +26,23 @@ object SessionManager {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val response = RetrofitInstance.sessionApi.createSession(mapOf("uid" to uid))
-                val sessionId = response.sessionId
 
-                guardarSessionId(context, sessionId)
+                if (response.isSuccessful) {
+                    val body = response.body()
+                    if (body != null) {
+                        val sessionId = body.sessionId
 
-                Log.d("SessionManager", "🎉 Sesión creada: $sessionId")
+                        guardarSessionId(context, sessionId)
 
-                onResult(sessionId)
+                        Log.d("SessionManager", "🎉 Sesión creada: $sessionId")
+
+                        onResult(sessionId)
+                    } else {
+                        Log.e("SessionManager", "❌ Respuesta vacía al crear sesión")
+                    }
+                } else {
+                    Log.e("SessionManager", "❌ Error HTTP creando sesión: ${response.code()}")
+                }
             } catch (e: HttpException) {
                 Log.e("SessionManager", "❌ Error HTTP creando sesión", e)
             } catch (e: Exception) {
@@ -40,6 +50,7 @@ object SessionManager {
             }
         }
     }
+
 
     fun guardarSessionId(context: Context, sessionId: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
