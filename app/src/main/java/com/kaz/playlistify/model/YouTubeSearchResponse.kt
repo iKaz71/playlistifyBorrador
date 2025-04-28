@@ -1,15 +1,18 @@
 package com.kaz.playlistify.model
 
 data class YouTubeSearchResponse(
-    val items: List<Item>
+    val items: List<YouTubeSearchResult>
 )
 
-data class Item(
-    val id: VideoId,
+data class YouTubeSearchResult(
+    val id: YouTubeSearchResultId,
     val snippet: Snippet
 )
 
-data class VideoId(val videoId: String?)
+data class YouTubeSearchResultId(
+    val videoId: String
+)
+
 data class Snippet(
     val title: String,
     val thumbnails: Thumbnails
@@ -19,4 +22,6 @@ data class Thumbnails(
     val default: Thumbnail
 )
 
-data class Thumbnail(val url: String)
+data class Thumbnail(
+    val url: String
+)
