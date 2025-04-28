@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.kaz.playlistify.model.Cancion
+import com.kaz.playlistify.network.firebase.FirebaseQueueManager
 import com.kaz.playlistify.network.youtube.YouTubeApi
 import com.kaz.playlistify.ui.screens.components.VideoItem
 import com.kaz.playlistify.util.SessionManager
@@ -31,16 +32,13 @@ fun SalaScreen(sessionId: String) {
     val context = LocalContext.current
     val currentVideo = remember { mutableStateOf<Cancion?>(null) }
 
-    // Carga inicial simulada de canciones
-    LaunchedEffect(Unit) {
-        cancionesEnCola.addAll(
-            listOf(
-                Cancion("hTWKbfoikeg", "Nirvana - Smells Like Teen Spirit", "anfitrión", "https://img.youtube.com/vi/hTWKbfoikeg/0.jpg"),
-                Cancion("Ckom3gf57Yw", "Muse - Uprising", "anfitrión", "https://img.youtube.com/vi/Ckom3gf57Yw/0.jpg"),
-                Cancion("ktvTqknDobU", "Linkin Park - Burn It Down", "invitado", "https://img.youtube.com/vi/ktvTqknDobU/0.jpg")
-            )
-        )
-        currentVideo.value = cancionesEnCola.firstOrNull()
+    // 🚀 Escuchamos Firebase en lugar de hardcodear
+    LaunchedEffect(sessionId) {
+        FirebaseQueueManager.escucharCola(sessionId) { canciones ->
+            cancionesEnCola.clear()
+            cancionesEnCola.addAll(canciones)
+            currentVideo.value = cancionesEnCola.firstOrNull()
+        }
     }
 
     Scaffold(
@@ -174,9 +172,7 @@ fun SalaScreen(sessionId: String) {
                             Text(video.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Text("Duración: ${formatDuration(video.duration)}")
                             Button(onClick = {
-                                cancionesEnCola.add(
-                                    Cancion(video.id, video.title, "Tú", video.thumbnailUrl)
-                                )
+                                FirebaseQueueManager.agregarCancionAFirebase(sessionId, video)
                                 openSheet.value = false
                             }) {
                                 Text("Agregar a la cola")
@@ -203,4 +199,3 @@ fun formatDuration(isoDuration: String): String {
         String.format("%d:%02d", minutes, seconds)
     }
 }
-
