@@ -1,15 +1,24 @@
 package com.kaz.playlistify.api
 
+import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object RetrofitInstance {
-    private const val BASE_URL = "https://playlistify-api.onrender.com/"
+    private const val BASE_URL = "https://playlistify-api-production.up.railway.app/"
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS) // Esperar 30 segundos al conectar
+        .readTimeout(30, TimeUnit.SECONDS)    // Esperar 30 segundos al leer respuesta
+        .writeTimeout(30, TimeUnit.SECONDS)   // Esperar 30 segundos al enviar datos
+        .build()
 
     val sessionApi: SessionApi by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
             .build()
             .create(SessionApi::class.java)
     }

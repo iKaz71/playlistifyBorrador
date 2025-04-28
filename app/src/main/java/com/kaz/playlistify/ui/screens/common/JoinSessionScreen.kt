@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.kaz.playlistify.api.RetrofitInstance
+import com.kaz.playlistify.model.VerifyRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,17 +63,29 @@ fun JoinSessionScreen(navController: NavController) {
                                 errorMessage = null
                             }
 
-                            val response = RetrofitInstance.sessionApi.verifyCode(mapOf("code" to code))
-                            Log.d("JoinSession", "✅ Código válido, sessionId: ${response.sessionId}")
+                            val response = RetrofitInstance.sessionApi.verifyCode(VerifyRequest(code))
 
-                            withContext(Dispatchers.Main) {
-                                navController.navigate("sala/${response.sessionId}")
+                            if (response.isSuccessful) {
+                                val body = response.body()
+                                if (body != null) {
+                                    Log.d("JoinSession", "✅ Código válido, sessionId: ${body.sessionId}")
+                                    withContext(Dispatchers.Main) {
+                                        navController.navigate("sala/${body.sessionId}")
+                                    }
+                                } else {
+                                    throw Exception("Respuesta vacía del servidor")
+                                }
+                            } else {
+                                throw Exception("Código inválido o no encontrado. HTTP ${response.code()}")
                             }
 
                         } catch (e: Exception) {
-                            Log.e("JoinSession", "❌ Error verificando código", e)
+                            Log.e("JoinSession", "❌ Error verificando código: ${e.message}")
+                            Log.e("JoinSession", "❌ LocalizedMessage: ${e.localizedMessage}")
+                            Log.e("JoinSession", "❌ Cause: ${e.cause}")
+                            Log.e("JoinSession", "❌ Exception completa: $e")
                             withContext(Dispatchers.Main) {
-                                errorMessage = "Código inválido o error de red"
+                                errorMessage = "Código inválido o error de conexión"
                             }
                         } finally {
                             withContext(Dispatchers.Main) {
@@ -93,6 +106,39 @@ fun JoinSessionScreen(navController: NavController) {
                 } else {
                     Text("Verificar y Unirse")
                 }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val request = VerifyRequest(code)
+                            val response = RetrofitInstance.sessionApi.verifyCode(request)
+
+                            if (response.isSuccessful) {
+                                val body = response.body()
+                                if (body != null) {
+                                    Log.d("TestConnection", "✅ API responde: ${body.sessionId}")
+                                } else {
+                                    throw Exception("Respuesta vacía al probar conexión")
+                                }
+                            } else {
+                                throw Exception("Error HTTP al probar conexión: ${response.code()}")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("TestConnection", "❌ Error al conectar con API: ${e.message}")
+                            Log.e("TestConnection", "❌ LocalizedMessage: ${e.localizedMessage}")
+                            Log.e("TestConnection", "❌ Cause: ${e.cause}")
+                            Log.e("TestConnection", "❌ Exception completa: $e")
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text("🧪 Probar conexión API")
             }
 
             if (errorMessage != null) {

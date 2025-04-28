@@ -10,10 +10,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.kaz.playlistify.api.RetrofitInstance
+import com.kaz.playlistify.model.VerifyRequest
 import com.kaz.playlistify.util.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,19 +59,33 @@ fun ConnectToTvScreen(navController: NavController) {
 
                         coroutineScope.launch(Dispatchers.IO) {
                             try {
-                                val response = RetrofitInstance.sessionApi.verifyCode(mapOf("code" to codeInput))
-                                Log.d("ConnectToTvScreen", "✅ Sesión encontrada: ${response.sessionId}")
+                                val response = RetrofitInstance.sessionApi.verifyCode(VerifyRequest(codeInput))
 
+                                if (response.isSuccessful) {
+                                    val body = response.body()
+                                    if (body != null) {
+                                        Log.d("ConnectToTvScreen", "✅ Sesión encontrada: ${body.sessionId}")
 
-                                SessionManager.guardarSessionId(context, response.sessionId)
+                                        SessionManager.guardarSessionId(context, body.sessionId)
 
-                                // Navegar a la sala pasando el sessionId
-                                navController.navigate("sala/${response.sessionId}")
+                                        withContext(Dispatchers.Main) {
+                                            navController.navigate("sala/${body.sessionId}")
+                                        }
+                                    } else {
+                                        throw Exception("Respuesta vacía del servidor")
+                                    }
+                                } else {
+                                    throw Exception("Código inválido o no encontrado. HTTP ${response.code()}")
+                                }
                             } catch (e: Exception) {
                                 Log.e("ConnectToTvScreen", "❌ Error al verificar código", e)
-                                errorMessage = "Código inválido o error de conexión"
+                                withContext(Dispatchers.Main) {
+                                    errorMessage = "Código inválido o error de conexión"
+                                }
                             } finally {
-                                isLoading = false
+                                withContext(Dispatchers.Main) {
+                                    isLoading = false
+                                }
                             }
                         }
                     } else {
@@ -95,4 +110,3 @@ fun ConnectToTvScreen(navController: NavController) {
         }
     }
 }
-
