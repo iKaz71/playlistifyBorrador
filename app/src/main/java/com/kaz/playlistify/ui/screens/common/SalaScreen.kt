@@ -119,7 +119,7 @@ fun SalaScreen(sessionId: String) {
         }
     }
 
-    //  BottomSheet para buscar canciones
+    // BottomSheet para buscar canciones
     if (openSheet.value) {
         ModalBottomSheet(
             onDismissRequest = { openSheet.value = false },
@@ -172,6 +172,7 @@ fun SalaScreen(sessionId: String) {
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(video.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("Duración: ${formatDuration(video.duration)}")
                             Button(onClick = {
                                 cancionesEnCola.add(
                                     Cancion(video.id, video.title, "Tú", video.thumbnailUrl)
@@ -183,26 +184,23 @@ fun SalaScreen(sessionId: String) {
                         }
                     }
                 }
-
-
-                val context = LocalContext.current
-
-
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-
-                Button(
-                    onClick = {
-                        SessionManager.limpiarSesion(context)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("🧹 Limpiar sesión (Debug)")
-                }
-
             }
         }
     }
 }
+
+fun formatDuration(isoDuration: String): String {
+    val regex = Regex("""PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?""")
+    val matchResult = regex.matchEntire(isoDuration) ?: return "Desconocida"
+
+    val hours = matchResult.groupValues[1].toIntOrNull() ?: 0
+    val minutes = matchResult.groupValues[2].toIntOrNull() ?: 0
+    val seconds = matchResult.groupValues[3].toIntOrNull() ?: 0
+
+    return if (hours > 0) {
+        String.format("%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format("%d:%02d", minutes, seconds)
+    }
+}
+

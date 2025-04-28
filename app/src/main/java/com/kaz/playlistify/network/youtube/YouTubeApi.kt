@@ -3,7 +3,7 @@ package com.kaz.playlistify.network.youtube
 import android.util.Log
 import com.google.gson.Gson
 import com.kaz.playlistify.BuildConfig
-import com.kaz.playlistify.model.YouTubeSearchResponse
+import com.kaz.playlistify.model.*
 import com.kaz.playlistify.ui.screens.components.VideoItem
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,10 +18,16 @@ object YouTubeApi {
         onResult: (List<VideoItem>) -> Unit,
         onError: (Exception) -> Unit
     ) {
+        if (query.isBlank()) {
+            onError(Exception("La consulta no puede estar vacía"))
+            return
+        }
+
         val apiKey = BuildConfig.YOUTUBE_API_KEY
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val url =
-            "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q=$encodedQuery&key=$apiKey"
+        val url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=5&q=$encodedQuery&key=$apiKey"
+
+        Log.d("YouTubeApi", "URL: $url")
 
         val request = Request.Builder().url(url).build()
 
@@ -30,21 +36,58 @@ object YouTubeApi {
                 client.newCall(request).execute().use { response ->
                     val body = response.body?.string()
                     if (response.isSuccessful && body != null) {
-                        val result = gson.fromJson(body, YouTubeSearchResponse::class.java)
-                        val videos = result.items.map {
+                        val searchResult = gson.fromJson(body, YouTubeSearchResponse::class.java)
+                        val videoIds = searchResult.items.map { it.id.videoId }
+
+                        obtenerDetallesDeVideos(searchResult.items, videoIds, onResult, onError)
+                    } else {
+                        onError(Exception("Error en búsqueda: ${response.code}"))
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("YouTubeApi", "❌ Error en búsqueda", e)
+                onError(e)
+            }
+        }.start()
+    }
+
+    private fun obtenerDetallesDeVideos(
+        searchItems: List<YouTubeSearchResult>,
+        videoIds: List<String>,
+        onResult: (List<VideoItem>) -> Unit,
+        onError: (Exception) -> Unit
+    ) {
+        val apiKey = BuildConfig.YOUTUBE_API_KEY
+        val ids = videoIds.joinToString(",")
+        val url = "https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=$ids&key=$apiKey"
+
+        Log.d("YouTubeApi", "Detalles URL: $url")
+
+        val request = Request.Builder().url(url).build()
+
+        Thread {
+            try {
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string()
+                    if (response.isSuccessful && body != null) {
+                        val detailsResult = gson.fromJson(body, YouTubeVideoDetailsResponse::class.java)
+
+                        val videos = searchItems.mapIndexed { index, item ->
+                            val duration = detailsResult.items.getOrNull(index)?.contentDetails?.duration ?: "Desconocido"
                             VideoItem(
-                                id = it.id.videoId ?: "",
-                                title = it.snippet.title,
-                                thumbnailUrl = it.snippet.thumbnails.default.url
+                                id = item.id.videoId,
+                                title = item.snippet.title,
+                                thumbnailUrl = item.snippet.thumbnails.default.url,
+                                duration = duration
                             )
                         }
                         onResult(videos)
                     } else {
-                        onError(Exception("Error: ${response.code}"))
+                        onError(Exception("Error al obtener detalles: ${response.code}"))
                     }
                 }
             } catch (e: Exception) {
-                Log.e("YouTubeApi", "Error: ${e.message}", e)
+                Log.e("YouTubeApi", "❌ Error al obtener detalles", e)
                 onError(e)
             }
         }.start()
