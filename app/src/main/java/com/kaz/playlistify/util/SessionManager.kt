@@ -5,6 +5,7 @@ import android.util.Log
 import com.kaz.playlistify.api.RetrofitInstance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -31,11 +32,8 @@ object SessionManager {
                     val body = response.body()
                     if (body != null) {
                         val sessionId = body.sessionId
-
                         guardarSessionId(context, sessionId)
-
                         Log.d("SessionManager", "🎉 Sesión creada: $sessionId")
-
                         onResult(sessionId)
                     } else {
                         Log.e("SessionManager", "❌ Respuesta vacía al crear sesión")
@@ -51,7 +49,6 @@ object SessionManager {
         }
     }
 
-
     fun guardarSessionId(context: Context, sessionId: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(SESSION_ID_KEY, sessionId).apply()
@@ -61,6 +58,13 @@ object SessionManager {
     fun obtenerSessionIdGuardado(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getString(SESSION_ID_KEY, null)
+    }
+
+    suspend fun obtenerSessionIdGuardadoSuspend(context: Context): String? {
+        return withContext(Dispatchers.IO) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(SESSION_ID_KEY, null)
+        }
     }
 
     fun limpiarSesion(context: Context) {
