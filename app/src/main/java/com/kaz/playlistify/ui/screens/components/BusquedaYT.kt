@@ -2,26 +2,29 @@ package com.kaz.playlistify.ui.screens.components
 
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import coil.compose.rememberAsyncImagePainter
 import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.network.firebase.FirebaseQueueManager
@@ -34,7 +37,6 @@ fun BusquedaYT(openSheet: MutableState<Boolean>, sessionId: String) {
     var resultados by remember { mutableStateOf(listOf<Cancion>()) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // Cierre con botón de retroceso
     BackHandler(enabled = openSheet.value) {
         openSheet.value = false
     }
@@ -42,88 +44,108 @@ fun BusquedaYT(openSheet: MutableState<Boolean>, sessionId: String) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(Color.Black)
             .padding(16.dp)
     ) {
         Text(
             text = "Buscar en YouTube",
-            style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White),
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Ej: Dido") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = {
-                keyboardController?.hide()
-                YouTubeApi.buscarVideos(
-                    query = query.text,
-                    onResult = { videos ->
-                        resultados = videos.map {
-                            Cancion(
-                                id = it.id,
-                                title = it.title,
-                                thumbnailUrl = it.thumbnailUrl,
-                                duration = it.duration,
-                                usuario = "Usuario actual"
-                            )
-                        }
-                    },
-                    onError = { e -> Log.e("BusquedaYT", "Error al buscar: ${e.message}") }
-                )
+            placeholder = { Text("Ej: Dido", color = Color.Gray) },
+            trailingIcon = {
+                IconButton(onClick = {
+                    keyboardController?.hide()
+                    YouTubeApi.buscarVideos(
+                        query = query.text,
+                        onResult = { videos ->
+                            resultados = videos.map {
+                                Cancion(
+                                    id = it.id,
+                                    title = it.title,
+                                    thumbnailUrl = it.thumbnailUrl,
+                                    duration = it.duration,
+                                    usuario = "Usuario actual"
+                                )
+                            }
+                        },
+                        onError = { e -> Log.e("BusquedaYT", "Error al buscar: ${e.message}") }
+                    )
+                }) {
+                    Icon(Icons.Default.Search, contentDescription = "Buscar", tint = Color(0xFFD32F2F))
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
-            shape = RoundedCornerShape(50)
-        ) {
-            Text("Buscar")
-        }
+                .clip(RoundedCornerShape(12.dp)),
+            shape = RoundedCornerShape(12.dp),
+            textStyle = TextStyle(color = Color.White),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFFD32F2F),
+                unfocusedBorderColor = Color(0xFFD32F2F),
+                cursorColor = Color.White,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            )
+        )
+
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(resultados) { video ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = rememberAsyncImagePainter(video.thumbnailUrl),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(60.dp)
-                                .clip(CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(video.title, maxLines = 2)
-                            Text("Duración: ${formatDuration(video.duration)}", style = TextStyle(color = Color.Gray))
+        if (resultados.isEmpty()) {
+            Text(
+                text = "Realiza una búsqueda para ver resultados.",
+                color = Color.LightGray,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 32.dp),
+                textAlign = TextAlign.Center
+            )
+        }
+
+        AnimatedVisibility(visible = resultados.isNotEmpty()) {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(resultados) { video ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFF1C1C1E))
+                            .padding(12.dp)
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = rememberAsyncImagePainter(video.thumbnailUrl),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(width = 96.dp, height = 54.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(video.title, maxLines = 2, color = Color.White)
+                                Text(
+                                    "Duración: ${formatDuration(video.duration)}",
+                                    style = TextStyle(color = Color.LightGray, fontSize = 12.sp)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    FirebaseQueueManager.agregarCancionAFirebase(sessionId, video)
+                                    openSheet.value = false
+                                }
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Agregar", tint = Color(0xFFD32F2F))
+                            }
                         }
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Button(
-                        onClick = {
-                            FirebaseQueueManager.agregarCancionAFirebase(sessionId, video)
-                            openSheet.value = false
-                        },
-                        shape = RoundedCornerShape(30.dp),
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("Agregar a la cola")
-                    }
-                    Divider(modifier = Modifier.padding(top = 8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
