@@ -1,12 +1,12 @@
 package com.kaz.playlistify.ui.screens.common
 
-import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.focusable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ExitToApp
@@ -16,26 +16,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
-import com.google.firebase.database.FirebaseDatabase
 import com.kaz.playlistify.model.Cancion
-import com.kaz.playlistify.model.UsuarioConectado
 import com.kaz.playlistify.network.firebase.FirebasePlaybackManager
 import com.kaz.playlistify.network.firebase.FirebaseQueueManager
-import com.kaz.playlistify.network.youtube.YouTubeApi
-import com.kaz.playlistify.ui.screens.components.VideoItem
+import com.kaz.playlistify.ui.screens.components.BusquedaYT
 import com.kaz.playlistify.util.SessionManager
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,22 +38,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val currentVideo = remember { mutableStateOf<Cancion?>(null) }
     val context = LocalContext.current
     var showLogoutDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        val deviceName = Build.MODEL ?: "Dispositivo"
-        val userId = java.util.UUID.randomUUID().toString()
-        val usuario = UsuarioConectado(deviceName = deviceName, userId = userId)
-
-        FirebaseDatabase.getInstance()
-            .getReference("sessions/$sessionId/connectedUsers/$userId")
-            .setValue(usuario)
-            .addOnSuccessListener {
-                Log.d("SalaScreen", "✅ Usuario conectado registrado")
-            }
-            .addOnFailureListener {
-                Log.e("SalaScreen", "❌ Error al registrar usuario", it)
-            }
-    }
 
     LaunchedEffect(sessionId) {
         FirebaseQueueManager.escucharCola(sessionId) { canciones ->
@@ -73,7 +50,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Playlistify") },
+                title = { Text("Playlistify", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notificaciones")
@@ -86,7 +63,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                     }
                 }
             )
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -94,152 +71,93 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            Text("Reproduciendo ahora:", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
+            Text("Reproduciendo ahora:", style = MaterialTheme.typography.titleLarge, color = Color.White)
+            Spacer(modifier = Modifier.height(12.dp))
 
             currentVideo.value?.let { video ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(
-                        painter = rememberAsyncImagePainter(video.thumbnailUrl),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(100.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(video.titulo, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text("https://youtube.com/watch?v=${video.id}", style = MaterialTheme.typography.bodySmall)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF1C1C1E))
+                        .padding(12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = rememberAsyncImagePainter(video.thumbnailUrl),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(video.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White)
+                            Text("Agregado por: ${video.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(video.duration, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            FirebasePlaybackManager.iniciarReproduccion(
+                                sessionId = sessionId,
+                                onSuccess = { Log.d("SalaScreen", "▶ Reproducción iniciada") },
+                                onError = { Log.e("SalaScreen", "❌ Fallo al iniciar reproducción", it) }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("▶ Reproducir Playlist", color = Color.White)
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            Text("En cola:", style = MaterialTheme.typography.titleMedium)
+            Text("En cola:", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(modifier = Modifier.height(8.dp))
 
             if (cancionesEnCola.isEmpty()) {
-                Text("No hay canciones en la cola todavía.")
+                Text("No hay canciones en la cola todavía.", color = Color.LightGray)
             } else {
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     items(cancionesEnCola) { cancion ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFF1C1C1E))
+                                .padding(12.dp)
+                                .padding(bottom = 8.dp)
                         ) {
-                            Image(
-                                painter = rememberAsyncImagePainter(cancion.thumbnailUrl),
-                                contentDescription = null,
-                                modifier = Modifier.size(60.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(cancion.titulo, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text("Agregado por: ${cancion.usuario}", style = MaterialTheme.typography.bodySmall)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(cancion.thumbnailUrl),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(cancion.title, color = Color.White, maxLines = 1)
+                                    Text("Agregado por: ${cancion.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text(cancion.duration, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                             }
                         }
-                        Divider()
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    FirebasePlaybackManager.iniciarReproduccion(
-                        sessionId = sessionId,
-                        onSuccess = { Log.d("SalaScreen", "▶ Reproducción iniciada") },
-                        onError = { Log.e("SalaScreen", "❌ Fallo al iniciar reproducción", it) }
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text("▶ Reproducir Playlist", color = Color.White)
             }
         }
     }
 
     if (openSheet.value) {
-        val keyboardController = LocalSoftwareKeyboardController.current
-        val focusRequester = remember { FocusRequester() }
-        val scope = rememberCoroutineScope()
-
-        ModalBottomSheet(
-            onDismissRequest = { openSheet.value = false },
-            modifier = Modifier.fillMaxHeight(0.85f)
-        ) {
-            var query by remember { mutableStateOf("") }
-            var resultados by remember { mutableStateOf(listOf<VideoItem>()) }
-
-            Column(modifier = Modifier.padding(16.dp)) {
-                Box(
-                    modifier = Modifier
-                        .size(1.dp)
-                        .focusRequester(focusRequester)
-                        .focusable()
-                )
-
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    label = { Text("Buscar en YouTube") },
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            focusRequester.requestFocus()
-                            keyboardController?.hide()
-
-                            scope.launch {
-                                delay(150)
-                                YouTubeApi.buscarVideos(
-                                    query = query,
-                                    onResult = { videos -> resultados = videos },
-                                    onError = { e -> Log.e("SalaScreen", "Error al buscar: ${e.message}") }
-                                )
-                            }
-                        }) {
-                            Icon(Icons.Default.Search, contentDescription = "Buscar")
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                LazyColumn {
-                    items(resultados) { video ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                        ) {
-                            Image(
-                                painter = rememberAsyncImagePainter(video.thumbnailUrl),
-                                contentDescription = null,
-                                modifier = Modifier.size(60.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(video.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Text("Duración: ${formatDuration(video.duration)}")
-                                Button(onClick = {
-                                    FirebaseQueueManager.agregarCancionAFirebase(sessionId, video)
-                                    openSheet.value = false
-                                }) {
-                                    Text("Agregar a la cola")
-                                }
-                            }
-                        }
-                        Divider()
-                    }
-                }
-            }
-        }
+        BusquedaYT(openSheet = openSheet, sessionId = sessionId)
     }
 
     if (showLogoutDialog) {
@@ -264,20 +182,5 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 }
             }
         )
-    }
-}
-
-fun formatDuration(isoDuration: String): String {
-    val regex = Regex("""PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?""")
-    val matchResult = regex.matchEntire(isoDuration) ?: return "Desconocida"
-
-    val hours = matchResult.groupValues[1].toIntOrNull() ?: 0
-    val minutes = matchResult.groupValues[2].toIntOrNull() ?: 0
-    val seconds = matchResult.groupValues[3].toIntOrNull() ?: 0
-
-    return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format("%d:%02d", minutes, seconds)
     }
 }
