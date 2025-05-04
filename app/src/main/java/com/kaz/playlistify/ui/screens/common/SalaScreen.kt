@@ -29,6 +29,7 @@ import com.kaz.playlistify.network.firebase.FirebasePlaybackManager
 import com.kaz.playlistify.network.firebase.FirebaseQueueManager
 import com.kaz.playlistify.ui.screens.components.BusquedaYT
 import com.kaz.playlistify.util.SessionManager
+import com.kaz.playlistify.util.formatDuration
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,7 +97,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                             Text(video.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White)
                             Text("Agregado por: ${video.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                         }
-                        Text(video.duration, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                        Text(formatDuration(video.duration), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
@@ -146,7 +147,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                                     Text(cancion.title, color = Color.White, maxLines = 1)
                                     Text("Agregado por: ${cancion.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                                 }
-                                Text(cancion.duration, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                                Text(formatDuration(cancion.duration), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
