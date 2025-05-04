@@ -57,7 +57,13 @@ fun BusquedaYT(
     fun ejecutarBusqueda() {
         keyboardController?.hide()
         focusManager.clearFocus()
-        scope.launch { bottomSheetState.expand() }
+        scope.launch {
+            if (!bottomSheetState.isVisible) {
+                bottomSheetState.show()
+            }
+            bottomSheetState.expand()
+        }
+
         if (query.text.isNotBlank()) {
             YouTubeApi.buscarVideos(
                 query = query.text,

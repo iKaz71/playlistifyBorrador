@@ -52,12 +52,11 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    // Al mostrar el sheet, forzar la expansión
+    // Mostrar el sheet sin expandir automáticamente
     LaunchedEffect(showSheet) {
         if (showSheet) {
             scope.launch {
                 bottomSheetState.show()
-                bottomSheetState.expand()
             }
         }
     }
