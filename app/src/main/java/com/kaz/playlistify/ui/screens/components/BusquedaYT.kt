@@ -17,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -36,6 +38,7 @@ import com.kaz.playlistify.network.youtube.YouTubeApi
 import com.kaz.playlistify.util.formatDuration
 import kotlinx.coroutines.launch
 import androidx.compose.material3.SheetState
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +52,13 @@ fun BusquedaYT(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
+    val focusRequester = remember { FocusRequester() }
+
+    // Solicito foco tras una pequeña demora al iniciar el Composable
+    LaunchedEffect(Unit) {
+        delay(250) // espera a que se abra el modal visualmente
+        focusRequester.requestFocus()
+    }
 
     BackHandler {
         onCloseSheet()
@@ -111,7 +121,8 @@ fun BusquedaYT(
             keyboardActions = KeyboardActions(onSearch = { ejecutarBusqueda() }),
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(RoundedCornerShape(12.dp))
+                .focusRequester(focusRequester),
             shape = RoundedCornerShape(12.dp),
             textStyle = TextStyle(color = Color.White),
             singleLine = true,
