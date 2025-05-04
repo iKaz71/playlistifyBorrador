@@ -3,35 +3,39 @@ package com.kaz.playlistify.ui.screens.common
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.database.FirebaseDatabase
 import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.model.UsuarioConectado
-import com.kaz.playlistify.network.firebase.FirebaseQueueManager
 import com.kaz.playlistify.network.firebase.FirebasePlaybackManager
+import com.kaz.playlistify.network.firebase.FirebaseQueueManager
 import com.kaz.playlistify.network.youtube.YouTubeApi
 import com.kaz.playlistify.ui.screens.components.VideoItem
 import com.kaz.playlistify.util.SessionManager
-import androidx.compose.material.icons.filled.ExitToApp
-
-
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +46,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val context = LocalContext.current
     var showLogoutDialog by remember { mutableStateOf(false) }
 
-    // Registrar dispositivo
     LaunchedEffect(Unit) {
         val deviceName = Build.MODEL ?: "Dispositivo"
         val userId = java.util.UUID.randomUUID().toString()
@@ -59,7 +62,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             }
     }
 
-    // Escuchar cola
     LaunchedEffect(sessionId) {
         FirebaseQueueManager.escucharCola(sessionId) { canciones ->
             cancionesEnCola.clear()
@@ -162,8 +164,11 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    // BottomSheet para búsqueda
     if (openSheet.value) {
+        val keyboardController = LocalSoftwareKeyboardController.current
+        val focusRequester = remember { FocusRequester() }
+        val scope = rememberCoroutineScope()
+
         ModalBottomSheet(
             onDismissRequest = { openSheet.value = false },
             modifier = Modifier.fillMaxHeight(0.85f)
@@ -172,27 +177,36 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             var resultados by remember { mutableStateOf(listOf<VideoItem>()) }
 
             Column(modifier = Modifier.padding(16.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(1.dp)
+                        .focusRequester(focusRequester)
+                        .focusable()
+                )
+
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     label = { Text("Buscar en YouTube") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            focusRequester.requestFocus()
+                            keyboardController?.hide()
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        YouTubeApi.buscarVideos(
-                            query = query,
-                            onResult = { videos -> resultados = videos },
-                            onError = { e -> Log.e("SalaScreen", "Error al buscar: ${e.message}") }
-                        )
+                            scope.launch {
+                                delay(150)
+                                YouTubeApi.buscarVideos(
+                                    query = query,
+                                    onResult = { videos -> resultados = videos },
+                                    onError = { e -> Log.e("SalaScreen", "Error al buscar: ${e.message}") }
+                                )
+                            }
+                        }) {
+                            Icon(Icons.Default.Search, contentDescription = "Buscar")
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Buscar")
-                }
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -240,7 +254,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                     showLogoutDialog = false
                 }) {
                     Icon(Icons.Default.ExitToApp, contentDescription = null)
-
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Cerrar sesión")
                 }
