@@ -18,9 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,15 +34,47 @@ import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.network.firebase.FirebaseQueueManager
 import com.kaz.playlistify.network.youtube.YouTubeApi
 import com.kaz.playlistify.util.formatDuration
+import kotlinx.coroutines.launch
+import androidx.compose.material3.SheetState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BusquedaYT(openSheet: MutableState<Boolean>, sessionId: String) {
+fun BusquedaYT(
+    sessionId: String,
+    bottomSheetState: SheetState,
+    onCloseSheet: () -> Unit
+) {
     var query by remember { mutableStateOf(TextFieldValue()) }
     var resultados by remember { mutableStateOf(listOf<Cancion>()) }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val scope = rememberCoroutineScope()
 
-    BackHandler(enabled = openSheet.value) {
-        openSheet.value = false
+    BackHandler {
+        onCloseSheet()
+    }
+
+    fun ejecutarBusqueda() {
+        keyboardController?.hide()
+        focusManager.clearFocus()
+        scope.launch { bottomSheetState.expand() }
+        if (query.text.isNotBlank()) {
+            YouTubeApi.buscarVideos(
+                query = query.text,
+                onResult = { videos ->
+                    resultados = videos.map {
+                        Cancion(
+                            id = it.id,
+                            title = it.title,
+                            thumbnailUrl = it.thumbnailUrl,
+                            duration = it.duration,
+                            usuario = "Usuario actual"
+                        )
+                    }
+                },
+                onError = { e -> Log.e("BusquedaYT", "Error al buscar: ${e.message}") }
+            )
+        }
     }
 
     Column(
@@ -55,30 +91,18 @@ fun BusquedaYT(openSheet: MutableState<Boolean>, sessionId: String) {
 
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = {
+                query = it
+                if (resultados.isNotEmpty()) resultados = emptyList()
+            },
             placeholder = { Text("Ej: Dido", color = Color.Gray) },
             trailingIcon = {
-                IconButton(onClick = {
-                    keyboardController?.hide()
-                    YouTubeApi.buscarVideos(
-                        query = query.text,
-                        onResult = { videos ->
-                            resultados = videos.map {
-                                Cancion(
-                                    id = it.id,
-                                    title = it.title,
-                                    thumbnailUrl = it.thumbnailUrl,
-                                    duration = it.duration,
-                                    usuario = "Usuario actual"
-                                )
-                            }
-                        },
-                        onError = { e -> Log.e("BusquedaYT", "Error al buscar: ${e.message}") }
-                    )
-                }) {
+                IconButton(onClick = { ejecutarBusqueda() }) {
                     Icon(Icons.Default.Search, contentDescription = "Buscar", tint = Color(0xFFD32F2F))
                 }
             },
+            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { ejecutarBusqueda() }),
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp)),
@@ -93,7 +117,6 @@ fun BusquedaYT(openSheet: MutableState<Boolean>, sessionId: String) {
                 unfocusedTextColor = Color.White
             )
         )
-
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -138,7 +161,7 @@ fun BusquedaYT(openSheet: MutableState<Boolean>, sessionId: String) {
                             IconButton(
                                 onClick = {
                                     FirebaseQueueManager.agregarCancionAFirebase(sessionId, video)
-                                    openSheet.value = false
+                                    onCloseSheet()
                                 }
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = "Agregar", tint = Color(0xFFD32F2F))

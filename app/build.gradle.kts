@@ -97,6 +97,10 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("androidx.compose.ui:ui-text")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("androidx.compose.foundation:foundation:1.5.4")
+
+
 
 
 

@@ -30,21 +30,35 @@ import com.kaz.playlistify.network.firebase.FirebaseQueueManager
 import com.kaz.playlistify.ui.screens.components.BusquedaYT
 import com.kaz.playlistify.util.SessionManager
 import com.kaz.playlistify.util.formatDuration
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val cancionesEnCola = remember { mutableStateListOf<Cancion>() }
-    val openSheet = remember { mutableStateOf(false) }
     val currentVideo = remember { mutableStateOf<Cancion?>(null) }
     val context = LocalContext.current
     var showLogoutDialog by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+    val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(sessionId) {
         FirebaseQueueManager.escucharCola(sessionId) { canciones ->
             cancionesEnCola.clear()
             cancionesEnCola.addAll(canciones)
             currentVideo.value = cancionesEnCola.firstOrNull()
+        }
+    }
+
+    // Al mostrar el sheet, forzar la expansión
+    LaunchedEffect(showSheet) {
+        if (showSheet) {
+            scope.launch {
+                bottomSheetState.show()
+                bottomSheetState.expand()
+            }
         }
     }
 
@@ -56,7 +70,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                     IconButton(onClick = { }) {
                         Icon(Icons.Default.Notifications, contentDescription = "Notificaciones")
                     }
-                    IconButton(onClick = { openSheet.value = true }) {
+                    IconButton(onClick = { showSheet = true }) {
                         Icon(Icons.Default.Search, contentDescription = "Buscar")
                     }
                     IconButton(onClick = { showLogoutDialog = true }) {
@@ -157,8 +171,20 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    if (openSheet.value) {
-        BusquedaYT(openSheet = openSheet, sessionId = sessionId)
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = bottomSheetState,
+            containerColor = Color.Black,
+            tonalElevation = 2.dp,
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        ) {
+            BusquedaYT(
+                sessionId = sessionId,
+                bottomSheetState = bottomSheetState,
+                onCloseSheet = { showSheet = false }
+            )
+        }
     }
 
     if (showLogoutDialog) {
