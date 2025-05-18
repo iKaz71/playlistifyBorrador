@@ -139,11 +139,13 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             Text("En cola:", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (cancionesEnCola.isEmpty()) {
+            val listaFiltrada = cancionesEnCola.filter { it.id != currentVideo.value?.id }
+
+            if (listaFiltrada.isEmpty()) {
                 Text("No hay canciones en la cola todavía.", color = Color.LightGray)
             } else {
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(cancionesEnCola) { cancion ->
+                    items(listaFiltrada) { cancion ->
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -163,20 +165,24 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(cancion.title, color = Color.White, maxLines = 1)
-                                    Text("Agregado por: ${cancion.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        "Agregado por: ${cancion.usuario}",
+                                        color = Color.LightGray,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                 }
                                 Text(
                                     text = if (cancion.duration.startsWith("PT")) formatDuration(cancion.duration) else cancion.duration,
                                     color = Color.LightGray,
                                     style = MaterialTheme.typography.bodySmall
                                 )
-
                             }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             }
+
         }
     }
 
