@@ -1,13 +1,9 @@
 package com.kaz.playlistify.ui.screens
 
-import android.app.Activity
-import android.content.Context
 import android.util.Log
-import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +13,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -24,11 +21,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,33 +36,55 @@ import com.kaz.playlistify.api.RetrofitInstance
 import com.kaz.playlistify.model.VerifyRequest
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun WelcomeScreen(onJoinClicked: (String) -> Unit) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
-    val focusRequester = remember { FocusRequester() }
-    val interactionSource = remember { MutableInteractionSource() }
-
-    var code by remember { mutableStateOf("") }
-    val isValidCode = code.length == 4
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
 
+    var code by remember { mutableStateOf(listOf("", "", "", "")) }
+    val focusRequesters = List(4) { remember { FocusRequester() } }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val isValidCode = code.all { it.length == 1 }
+
     val gradient = Brush.linearGradient(
-        colors = listOf(
-            Color(0xFF1C1C1E), // gris oscuro elegante
-            Color(0xFF0A0A0A), // negro profundo
-            Color(0xFF8E2DE2)  // toque morado-rosado premium
-        ),
+        colors = listOf(Color(0xFF1C1C1E), Color(0xFF0A0A0A), Color(0xFF8E2DE2)),
         start = Offset.Zero,
         end = Offset.Infinite
     )
 
+    fun hideKeyboard() {
+        keyboardController?.hide()
+        focusManager.clearFocus()
+    }
+
+    fun verifyCode() {
+        hideKeyboard()
+        val fullCode = code.joinToString("")
+        scope.launch {
+            try {
+                val response = RetrofitInstance.sessionApi.verifyCode(VerifyRequest(fullCode))
+                if (response.isSuccessful && response.body()?.sessionId != null) {
+                    val sessionId = response.body()!!.sessionId
+                    Log.d("WelcomeScreen", "✅ Código $fullCode verificado → SessionId: $sessionId")
+                    onJoinClicked(sessionId)
+                } else {
+                    errorMessage = "Código inválido o sala no disponible."
+                }
+            } catch (e: Exception) {
+                Log.e("WelcomeScreen", "❌ Error verificando código", e)
+                errorMessage = "Error de conexión. Intenta nuevamente."
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(brush = gradient)
+            .background(gradient)
             .padding(24.dp)
     ) {
         Column(
@@ -72,10 +92,7 @@ fun WelcomeScreen(onJoinClicked: (String) -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painter = painterResource(id = R.drawable.logo_playlistify),
                     contentDescription = "Logo",
@@ -93,87 +110,53 @@ fun WelcomeScreen(onJoinClicked: (String) -> Unit) {
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "Bienvenido/a a Playlistify",
-                fontSize = 22.sp,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-
-            Text(
-                text = "Disfruta tu música en equipo.",
-                fontSize = 16.sp,
-                color = Color.White.copy(alpha = 0.9f),
-                textAlign = TextAlign.Center
-            )
-
+            Text("Bienvenido/a a Playlistify", fontSize = 22.sp, color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Disfruta tu música en equipo.", fontSize = 16.sp, color = Color.White.copy(alpha = 0.9f))
             Spacer(modifier = Modifier.height(28.dp))
-
-            Text(
-                text = "Ingresa el código de tu sala activa:",
-                fontSize = 16.sp,
-                color = Color.White.copy(alpha = 0.9f),
-                textAlign = TextAlign.Center
-            )
-
+            Text("Ingresa el código de tu sala activa:", fontSize = 16.sp, color = Color.White.copy(alpha = 0.9f))
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier
-                    .clickable {
-                        showKeyboard(context)
-                        focusRequester.requestFocus()
-                    }
-            ) {
-                for (i in 0 until 4) {
-                    Box(
+            Row(horizontalArrangement = Arrangement.Center) {
+                for (i in 0..3) {
+                    OutlinedTextField(
+                        value = code[i],
+                        onValueChange = { input ->
+                            if (input.length <= 1 && input.all { it.isDigit() }) {
+                                code = code.toMutableList().also { it[i] = input }
+                                if (input.isNotEmpty()) {
+                                    if (i < 3) focusRequesters[i + 1].requestFocus()
+                                    else hideKeyboard()
+                                }
+                            }
+                        },
+                        singleLine = true,
                         modifier = Modifier
                             .width(60.dp)
                             .height(70.dp)
-                            .background(
-                                color = Color.White.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .padding(4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = code.getOrNull(i)?.toString() ?: "",
-                            color = Color.White,
+                            .padding(4.dp)
+                            .focusRequester(focusRequesters[i]),
+                        textStyle = LocalTextStyle.current.copy(
                             fontSize = 28.sp,
+                            textAlign = TextAlign.Center,
+                            color = Color.White,
                             fontWeight = FontWeight.Bold
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = if (i == 3) ImeAction.Done else ImeAction.Next
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.White.copy(alpha = 0.1f),
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.1f),
+                            cursorColor = Color.White,
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent
                         )
-                    }
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = code,
-                onValueChange = {
-                    if (it.length <= 4) code = it.filter { char -> char.isDigit() }
-                    if (code.length == 4) hideKeyboard(context)
-                },
-                placeholder = { Text("0000") },
-                maxLines = 1,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                interactionSource = interactionSource,
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedBorderColor = Color.Transparent,
-                    cursorColor = Color.White,
-                    focusedTextColor = Color.Transparent,
-                    unfocusedTextColor = Color.Transparent
-                ),
-                modifier = Modifier
-                    .size(1.dp)
-                    .focusRequester(focusRequester)
-            )
 
             errorMessage?.let {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -181,26 +164,8 @@ fun WelcomeScreen(onJoinClicked: (String) -> Unit) {
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
             Button(
-                onClick = {
-                    hideKeyboard(context)
-                    scope.launch {
-                        try {
-                            val response = RetrofitInstance.sessionApi.verifyCode(VerifyRequest(code))
-                            if (response.isSuccessful && response.body()?.sessionId != null) {
-                                val sessionId = response.body()!!.sessionId
-                                Log.d("WelcomeScreen", "✅ Código $code verificado → SessionId: $sessionId")
-                                onJoinClicked(sessionId)
-                            } else {
-                                errorMessage = "Código inválido o sala no disponible."
-                            }
-                        } catch (e: Exception) {
-                            Log.e("WelcomeScreen", "❌ Error verificando código", e)
-                            errorMessage = "Error de conexión. Intenta nuevamente."
-                        }
-                    }
-                },
+                onClick = { verifyCode() },
                 enabled = isValidCode,
                 modifier = Modifier
                     .fillMaxWidth(0.85f)
@@ -223,14 +188,4 @@ fun WelcomeScreen(onJoinClicked: (String) -> Unit) {
                 .padding(bottom = 12.dp)
         )
     }
-}
-
-private fun hideKeyboard(context: Context) {
-    val inputMethodManager = context.getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
-    inputMethodManager.toggleSoftInput(InputMethodManager.HIDE_IMPLICIT_ONLY, 0)
-}
-
-private fun showKeyboard(context: Context) {
-    val inputMethodManager = context.getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
-    inputMethodManager.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
 }

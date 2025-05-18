@@ -82,9 +82,9 @@ fun BusquedaYT(
                         Cancion(
                             id = it.id,
                             title = it.title,
-                            thumbnailUrl = it.thumbnailUrl,
-                            duration = it.duration,
-                            usuario = "Usuario actual"
+                            thumbnailUrl = "https://i.ytimg.com/vi/${it.id}/hqdefault.jpg",
+                            duration = formatDuration(it.duration),
+                            usuario = "demo_user"
                         )
                     }
                 },
@@ -171,9 +171,10 @@ fun BusquedaYT(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(video.title, maxLines = 2, color = Color.White)
                                 Text(
-                                    "Duración: ${formatDuration(video.duration)}",
+                                    "Duración: ${video.duration}",
                                     style = TextStyle(color = Color.LightGray, fontSize = 12.sp)
                                 )
+
                             }
                             IconButton(
                                 onClick = {

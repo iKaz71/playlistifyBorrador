@@ -110,7 +110,12 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                             Text(video.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White)
                             Text("Agregado por: ${video.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                         }
-                        Text(formatDuration(video.duration), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            text = if (video.duration.startsWith("PT")) formatDuration(video.duration) else video.duration,
+                            color = Color.LightGray,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
@@ -160,7 +165,12 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                                     Text(cancion.title, color = Color.White, maxLines = 1)
                                     Text("Agregado por: ${cancion.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                                 }
-                                Text(formatDuration(cancion.duration), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    text = if (cancion.duration.startsWith("PT")) formatDuration(cancion.duration) else cancion.duration,
+                                    color = Color.LightGray,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+
                             }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
