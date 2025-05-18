@@ -1,41 +1,48 @@
 package com.kaz.playlistify.network.firebase
 
 import android.util.Log
-import com.google.firebase.database.FirebaseDatabase
+import com.kaz.playlistify.api.RetrofitInstance
 import com.kaz.playlistify.model.Cancion
+import com.kaz.playlistify.model.CancionRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 object FirebaseQueueManager {
 
-    private val database = FirebaseDatabase.getInstance()
-
-    // Ahora esta función recibe un objeto Cancion, no VideoItem
     fun agregarCancionAFirebase(sessionId: String, cancion: Cancion) {
-        val queueRef = database.getReference("sessions")
-            .child(sessionId)
-            .child("queue")
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val body = CancionRequest(
+                    sessionId = sessionId,
+                    id = cancion.id,
+                    titulo = cancion.title,
+                    usuario = cancion.usuario,
+                    thumbnailUrl = cancion.thumbnailUrl,
+                    duration = cancion.duration
+                )
 
-        val nuevaCancion = mapOf(
-            "id" to cancion.id,
-            "titulo" to cancion.title,
-            "usuario" to cancion.usuario,
-            "thumbnailUrl" to cancion.thumbnailUrl,
-            "duration" to cancion.duration
-        )
+                Log.d("FirebaseQueueManager", "🔎 Enviando: $body")
 
-        queueRef.push().setValue(nuevaCancion)
-            .addOnSuccessListener {
-                Log.d("FirebaseQueueManager", "✅ Canción agregada correctamente a Firebase")
+                val response = RetrofitInstance.queueApi.agregarCancion(body)
+
+                if (response.isSuccessful) {
+                    Log.d("FirebaseQueueManager", "✅ Canción enviada correctamente al backend")
+                } else {
+                    Log.e("FirebaseQueueManager", "❌ Error HTTP: ${response.code()} - ${response.message()}")
+                }
+            } catch (e: Exception) {
+                Log.e("FirebaseQueueManager", "❌ Error de red al enviar canción: ${e.message}")
             }
-            .addOnFailureListener { error ->
-                Log.e("FirebaseQueueManager", "❌ Error al agregar canción: ${error.message}")
-            }
+        }
     }
 
     // Escuchar cambios en /sessions/{sessionId}/queue
     fun escucharCola(sessionId: String, onUpdate: (List<Cancion>) -> Unit) {
-        val queueRef = database.getReference("sessions")
+        val database = com.google.firebase.database.FirebaseDatabase.getInstance()
+        val queueRef = database.getReference("queues")
             .child(sessionId)
-            .child("queue")
+
 
         queueRef.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
             override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {

@@ -9,9 +9,9 @@ object RetrofitInstance {
     private const val BASE_URL = "https://playlistify-api-production.up.railway.app/"
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS) // Esperar 30 segundos al conectar
-        .readTimeout(30, TimeUnit.SECONDS)    // Esperar 30 segundos al leer respuesta
-        .writeTimeout(30, TimeUnit.SECONDS)   // Esperar 30 segundos al enviar datos
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     val sessionApi: SessionApi by lazy {
@@ -21,5 +21,14 @@ object RetrofitInstance {
             .client(client)
             .build()
             .create(SessionApi::class.java)
+    }
+
+    val queueApi: QueueApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+            .create(QueueApi::class.java)
     }
 }
