@@ -6,7 +6,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ExitToApp
@@ -24,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
+import com.google.firebase.database.FirebaseDatabase
 import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.network.firebase.FirebasePlaybackManager
 import com.kaz.playlistify.network.firebase.FirebaseQueueManager
@@ -44,6 +47,10 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSheet by remember { mutableStateOf(false) }
 
+    val rol = remember { mutableStateOf("Anfitrión") }
+    val codigoSala = remember { mutableStateOf("----") }
+
+    // 🔄 Escuchar cambios de la cola
     LaunchedEffect(sessionId) {
         FirebaseQueueManager.escucharCola(sessionId) { canciones ->
             cancionesEnCola.clear()
@@ -52,7 +59,15 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    // Mostrar el sheet sin expandir automáticamente
+    // 🔐 Obtener código de sesión real desde Firebase
+    LaunchedEffect(sessionId) {
+        val ref = FirebaseDatabase.getInstance().getReference("sessions")
+        ref.child(sessionId).child("code").get().addOnSuccessListener {
+            codigoSala.value = it.getValue(String::class.java) ?: "----"
+        }
+    }
+
+    // Mostrar el BottomSheet
     LaunchedEffect(showSheet) {
         if (showSheet) {
             scope.launch {
@@ -79,12 +94,30 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             )
         },
     ) { padding ->
+        val scrollState = rememberScrollState()
+        val listaFiltrada = cancionesEnCola.filter { it.id != currentVideo.value?.id }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
+                .let {
+                    if (listaFiltrada.size < 3) it.verticalScroll(scrollState) else it
+                }
         ) {
+            // 🔢 Código de sala y rol
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Código: ${codigoSala.value}", color = Color.White)
+                Text("Rol: ${rol.value}", color = Color.White)
+            }
+
+            // 🎧 Reproducción actual
             Text("Reproduciendo ahora:", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -115,7 +148,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                             color = Color.LightGray,
                             style = MaterialTheme.typography.bodySmall
                         )
-
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
@@ -139,12 +171,10 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             Text("En cola:", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(modifier = Modifier.height(8.dp))
 
-            val listaFiltrada = cancionesEnCola.filter { it.id != currentVideo.value?.id }
-
             if (listaFiltrada.isEmpty()) {
                 Text("No hay canciones en la cola todavía.", color = Color.LightGray)
             } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
+                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
                     items(listaFiltrada) { cancion ->
                         Column(
                             modifier = Modifier
@@ -182,7 +212,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                     }
                 }
             }
-
         }
     }
 
@@ -205,7 +234,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            title = { Text("¿Cerrar sesión?") },
             text = { Text("¿Estás seguro de que quieres salir de la sala actual?") },
             confirmButton = {
                 TextButton(onClick = {
