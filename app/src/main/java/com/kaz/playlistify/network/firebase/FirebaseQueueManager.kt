@@ -1,7 +1,7 @@
 package com.kaz.playlistify.network.firebase
 
 import android.util.Log
-import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.*
 import com.kaz.playlistify.api.RetrofitInstance
 import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.model.CancionRequest
@@ -29,7 +29,7 @@ object FirebaseQueueManager {
                 if (response.isSuccessful) {
                     Log.d("FirebaseQueueManager", "✅ Canción enviada correctamente al backend")
 
-                    // 🔁 También escribir en sessions/{sessionId}/queue
+                    // 🔁 También escribir en sessions/{sessionId}/queue (opcional)
                     val db = FirebaseDatabase.getInstance()
                     val ref = db.getReference("sessions").child(sessionId).child("queue")
                     val key = ref.push().key ?: return@launch
@@ -59,17 +59,16 @@ object FirebaseQueueManager {
         }
     }
 
-    // Escuchar cambios en /queues/{sessionId}
     fun escucharCola(sessionId: String, onUpdate: (List<Cancion>) -> Unit) {
         val queueRef = FirebaseDatabase.getInstance()
             .getReference("queues")
             .child(sessionId)
 
-        queueRef.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
-            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+        queueRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
                 val canciones = mutableListOf<Cancion>()
                 snapshot.children.forEach { child ->
-                    val id = child.child("id").getValue(String::class.java) ?: ""
+                    val id = child.child("id").getValue(String::class.java) ?: return@forEach
                     val titulo = child.child("titulo").getValue(String::class.java) ?: ""
                     val usuario = child.child("usuario").getValue(String::class.java) ?: ""
                     val thumbnailUrl = child.child("thumbnailUrl").getValue(String::class.java) ?: ""
@@ -79,9 +78,56 @@ object FirebaseQueueManager {
                 onUpdate(canciones)
             }
 
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+            override fun onCancelled(error: DatabaseError) {
                 Log.e("FirebaseQueueManager", "❌ Error al escuchar la cola: ${error.message}")
             }
         })
+    }
+
+    fun escucharPlaybackState(sessionId: String, onUpdate: (Cancion?) -> Unit) {
+        val ref = FirebaseDatabase.getInstance()
+            .getReference("playbackState")
+            .child(sessionId)
+            .child("currentVideo")
+
+        ref.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val id = snapshot.child("id").getValue(String::class.java) ?: return
+                val titulo = snapshot.child("titulo").getValue(String::class.java) ?: ""
+                val usuario = snapshot.child("usuario").getValue(String::class.java) ?: ""
+                val thumbnailUrl = snapshot.child("thumbnailUrl").getValue(String::class.java) ?: ""
+                val duration = snapshot.child("duration").getValue(String::class.java) ?: ""
+
+                onUpdate(Cancion(id, titulo, usuario, thumbnailUrl, duration))
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e("FirebaseQueueManager", "❌ Error en playbackState", error.toException())
+            }
+        })
+    }
+
+    fun eliminarCancion(sessionId: String, cancionId: String) {
+        val queueRef = FirebaseDatabase.getInstance()
+            .getReference("queues")
+            .child(sessionId)
+
+        queueRef.get().addOnSuccessListener { snapshot ->
+            for (child in snapshot.children) {
+                val id = child.child("id").getValue(String::class.java)
+                if (id == cancionId) {
+                    child.ref.removeValue()
+                        .addOnSuccessListener {
+                            Log.d("FirebaseQueueManager", "✅ Canción eliminada correctamente")
+                        }
+                        .addOnFailureListener {
+                            Log.e("FirebaseQueueManager", "❌ Error al eliminar canción", it)
+                        }
+                    break
+                }
+            }
+        }.addOnFailureListener {
+            Log.e("FirebaseQueueManager", "❌ Error al obtener la cola para eliminar", it)
+        }
     }
 }

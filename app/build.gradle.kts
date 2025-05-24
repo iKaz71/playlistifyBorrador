@@ -59,7 +59,7 @@ dependencies {
 
     // Jetpack Compose UI y Material3
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-text")
+    
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
@@ -98,7 +98,11 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("androidx.compose.ui:ui-text")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("androidx.compose.foundation:foundation:1.5.4")
+
+
+    implementation("androidx.compose.material:material:1.6.0")
+    implementation("androidx.compose.material3:material3:1.2.0")
+
 
 
 

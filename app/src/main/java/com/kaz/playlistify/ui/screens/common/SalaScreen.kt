@@ -9,11 +9,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.DismissDirection
+import androidx.compose.material.DismissValue
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.SwipeToDismiss
+import androidx.compose.material.rememberDismissState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +37,9 @@ import com.kaz.playlistify.util.SessionManager
 import com.kaz.playlistify.util.formatDuration
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val cancionesEnCola = remember { mutableStateListOf<Cancion>() }
@@ -50,16 +54,22 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val rol = remember { mutableStateOf("Anfitrión") }
     val codigoSala = remember { mutableStateOf("----") }
 
-    // 🔄 Escuchar cambios de la cola
+    // 🔄 Escuchar la cola
     LaunchedEffect(sessionId) {
         FirebaseQueueManager.escucharCola(sessionId) { canciones ->
             cancionesEnCola.clear()
             cancionesEnCola.addAll(canciones)
-            currentVideo.value = cancionesEnCola.firstOrNull()
         }
     }
 
-    // 🔐 Obtener código de sesión real desde Firebase
+    // 🔄 Escuchar el video en reproducción desde playbackState
+    LaunchedEffect(sessionId) {
+        FirebaseQueueManager.escucharPlaybackState(sessionId) { videoActual ->
+            currentVideo.value = videoActual
+        }
+    }
+
+    // 🔐 Obtener código real
     LaunchedEffect(sessionId) {
         val ref = FirebaseDatabase.getInstance().getReference("sessions")
         ref.child(sessionId).child("code").get().addOnSuccessListener {
@@ -67,7 +77,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    // Mostrar el BottomSheet
+    // Mostrar BottomSheet
     LaunchedEffect(showSheet) {
         if (showSheet) {
             scope.launch {
@@ -92,7 +102,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                     }
                 }
             )
-        },
+        }
     ) { padding ->
         val scrollState = rememberScrollState()
         val listaFiltrada = cancionesEnCola.filter { it.id != currentVideo.value?.id }
@@ -106,18 +116,14 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                     if (listaFiltrada.size < 3) it.verticalScroll(scrollState) else it
                 }
         ) {
-            // 🔢 Código de sala y rol
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text("Código: ${codigoSala.value}", color = Color.White)
                 Text("Rol: ${rol.value}", color = Color.White)
             }
 
-            // 🎧 Reproducción actual
             Text("Reproduciendo ahora:", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -134,9 +140,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                             painter = rememberAsyncImagePainter(video.thumbnailUrl),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp))
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -175,39 +179,91 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 Text("No hay canciones en la cola todavía.", color = Color.LightGray)
             } else {
                 LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(listaFiltrada) { cancion ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF1C1C1E))
-                                .padding(12.dp)
-                                .padding(bottom = 8.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Image(
-                                    painter = rememberAsyncImagePainter(cancion.thumbnailUrl),
-                                    contentDescription = null,
+                    items(listaFiltrada, key = { it.id }) { cancion ->
+                        var mostrarConfirmacion by remember { mutableStateOf(false) }
+
+                        if (mostrarConfirmacion) {
+                            AlertDialog(
+                                onDismissRequest = { mostrarConfirmacion = false },
+                                title = { Text("Confirmar eliminación") },
+                                text = { Text("¿Estás seguro de que deseas eliminar esta canción?") },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        mostrarConfirmacion = false
+                                        FirebaseQueueManager.eliminarCancion(sessionId, cancion.id)
+                                    }) {
+                                        Text("Eliminar", color = Color.Red)
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { mostrarConfirmacion = false }) {
+                                        Text("Cancelar")
+                                    }
+                                }
+                            )
+                        }
+
+                        val dismissState = rememberDismissState(
+                            confirmStateChange = { dismissValue ->
+                                if (dismissValue == DismissValue.DismissedToStart) {
+                                    mostrarConfirmacion = true
+                                }
+                                false
+                            }
+                        )
+
+                        SwipeToDismiss(
+                            state = dismissState,
+                            directions = setOf(DismissDirection.EndToStart),
+                            background = {
+                                Box(
                                     modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(cancion.title, color = Color.White, maxLines = 1)
-                                    Text(
-                                        "Agregado por: ${cancion.usuario}",
-                                        color = Color.LightGray,
-                                        style = MaterialTheme.typography.bodySmall
+                                        .fillMaxSize()
+                                        .background(Color.Red)
+                                        .padding(horizontal = 20.dp),
+                                    contentAlignment = Alignment.CenterEnd
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Eliminar canción",
+                                        tint = Color.White
                                     )
                                 }
-                                Text(
-                                    text = if (cancion.duration.startsWith("PT")) formatDuration(cancion.duration) else cancion.duration,
-                                    color = Color.LightGray,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                            },
+                            dismissContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.Black)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(Color(0xFF1C1C1E))
+                                            .padding(12.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Image(
+                                                painter = rememberAsyncImagePainter(cancion.thumbnailUrl),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(cancion.title, color = Color.White, maxLines = 1)
+                                                Text("Agregado por: ${cancion.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                                            }
+                                            Text(
+                                                text = if (cancion.duration.startsWith("PT")) formatDuration(cancion.duration) else cancion.duration,
+                                                color = Color.LightGray,
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+                                }
                             }
-                        }
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
@@ -254,3 +310,4 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         )
     }
 }
+
