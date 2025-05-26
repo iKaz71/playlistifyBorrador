@@ -62,12 +62,13 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    // 🔄 Escuchar el video en reproducción desde playbackState
+
     LaunchedEffect(sessionId) {
-        FirebaseQueueManager.escucharPlaybackState(sessionId) { videoActual ->
+        FirebasePlaybackManager.escucharEstadoReproduccion(sessionId) { videoActual ->
             currentVideo.value = videoActual
         }
     }
+
 
     // 🔐 Obtener código real
     LaunchedEffect(sessionId) {
