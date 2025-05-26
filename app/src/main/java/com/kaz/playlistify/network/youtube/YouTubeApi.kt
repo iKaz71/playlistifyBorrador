@@ -58,7 +58,7 @@ object YouTubeApi {
         onError: (Exception) -> Unit
     ) {
         val apiKey = BuildConfig.YOUTUBE_API_KEY
-        val ids = videoIds.joinToString(",")
+        val ids = videoIds.filterNotNull().joinToString(",")
         val url = "https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=$ids&key=$apiKey"
 
         Log.d("YouTubeApi", "Detalles URL: $url")
@@ -72,15 +72,25 @@ object YouTubeApi {
                     if (response.isSuccessful && body != null) {
                         val detailsResult = gson.fromJson(body, YouTubeVideoDetailsResponse::class.java)
 
-                        val videos = searchItems.mapIndexed { index, item ->
-                            val duration = detailsResult.items.getOrNull(index)?.contentDetails?.duration ?: "Desconocido"
-                            VideoItem(
-                                id = item.id.videoId,
-                                title = item.snippet.title,
-                                thumbnailUrl = item.snippet.thumbnails.default.url,
-                                duration = duration
-                            )
-                        }
+                        val videos = searchItems
+                            .filter { it.id.videoId != null }
+                            .mapIndexedNotNull { index, item ->
+                                val videoId = item.id.videoId ?: return@mapIndexedNotNull null
+                                val duration = detailsResult.items.getOrNull(index)?.contentDetails?.duration ?: "PT0S"
+
+                                try {
+                                    VideoItem(
+                                        id = videoId,
+                                        title = item.snippet.title ?: "Sin título",
+                                        thumbnailUrl = item.snippet.thumbnails?.default?.url ?: "",
+                                        duration = duration
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e("YouTubeApi", "❌ Error al crear VideoItem", e)
+                                    null
+                                }
+                            }
+
                         onResult(videos)
                     } else {
                         onError(Exception("Error al obtener detalles: ${response.code}"))
@@ -92,4 +102,5 @@ object YouTubeApi {
             }
         }.start()
     }
+
 }
