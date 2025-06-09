@@ -29,7 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
-import com.google.firebase.database.FirebaseDatabase
+
 import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.model.CancionEnCola
 import com.kaz.playlistify.network.firebase.FirebasePlaybackManager
@@ -39,6 +39,7 @@ import com.kaz.playlistify.util.SessionManager
 import com.kaz.playlistify.util.formatDuration
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.PlayArrow
+import com.google.firebase.database.FirebaseDatabase
 
 import com.kaz.playlistify.model.PlayNextResponse
 
@@ -46,36 +47,37 @@ import com.kaz.playlistify.model.PlayNextResponse
 @Composable
 fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val cancionesEnCola = remember { mutableStateListOf<CancionEnCola>() }
+    val orderedPushKeys = remember { mutableStateListOf<String>() }
     val currentVideo = remember { mutableStateOf<Cancion?>(null) }
     val context = LocalContext.current
     var showLogoutDialog by remember { mutableStateOf(false) }
-
-    val scope = rememberCoroutineScope()
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSheet by remember { mutableStateOf(false) }
-
     val rol = remember { mutableStateOf("Anfitrión") }
     val codigoSala = remember { mutableStateOf("----") }
 
-    // Indica si se debe mostrar el dialog de Play Next y en qué índice
-    var mostrarConfirmacionPlayNext by remember { mutableStateOf<Int?>(null) }
-    var mostrarConfirmacionEliminar by remember { mutableStateOf<Int?>(null) }
+    // Estados de confirmación por canción
+    var mostrarConfirmacionPlayNext by remember { mutableStateOf<String?>(null) }
+    var mostrarConfirmacionEliminar by remember { mutableStateOf<String?>(null) }
 
-    // 🔄 Escuchar la cola
+    // Nueva: Estado para forzar reinicio de swipe
+    var swipeRefreshId by remember { mutableStateOf(0) }
+
+    // Escuchamos la cola y el orden REAL de Firebase
     LaunchedEffect(sessionId) {
-        FirebaseQueueManager.escucharColaOrdenada(sessionId) { nuevasCancionesEnCola ->
+        FirebaseQueueManager.escucharColaOrdenada(sessionId) { nuevasCancionesEnCola, nuevosPushKeys ->
             cancionesEnCola.clear()
             cancionesEnCola.addAll(nuevasCancionesEnCola)
+            orderedPushKeys.clear()
+            orderedPushKeys.addAll(nuevosPushKeys)
+            swipeRefreshId++ // Forzar recomposición de todos los swipe states
         }
     }
-
-
     LaunchedEffect(sessionId) {
         FirebasePlaybackManager.escucharEstadoReproduccion(sessionId) { videoActual ->
             currentVideo.value = videoActual
         }
     }
-
     // 🔐 Obtener código real
     LaunchedEffect(sessionId) {
         val ref = FirebaseDatabase.getInstance().getReference("sessions")
@@ -84,14 +86,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    // Mostrar BottomSheet
-    LaunchedEffect(showSheet) {
-        if (showSheet) {
-            scope.launch {
-                bottomSheetState.show()
-            }
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -112,16 +106,17 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     ) { padding ->
         val scrollState = rememberScrollState()
-        val listaFiltrada = cancionesEnCola.filter { it.cancion.id != currentVideo.value?.id }
+        val currentlyPlayingPushKey = orderedPushKeys.firstOrNull()
+        val enColaFiltrada = orderedPushKeys
+            .filter { it != currentlyPlayingPushKey }
+            .mapNotNull { pushKey -> cancionesEnCola.find { it.pushKey == pushKey } }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
-                .let {
-                    if (listaFiltrada.size < 3) it.verticalScroll(scrollState) else it
-                }
+                .let { if (enColaFiltrada.size < 3) it.verticalScroll(scrollState) else it }
         ) {
             Row(
                 modifier = Modifier
@@ -136,46 +131,49 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             Text("Reproduciendo ahora:", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(modifier = Modifier.height(12.dp))
 
-            currentVideo.value?.let { video ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF1C1C1E))
-                        .padding(12.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = rememberAsyncImagePainter(video.thumbnailUrl),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp))
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(video.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White)
-                            Text("Agregado por: ${video.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-                        }
-                        Text(
-                            text = if (video.duration.startsWith("PT")) formatDuration(video.duration) else video.duration,
-                            color = Color.LightGray,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            FirebasePlaybackManager.iniciarReproduccion(
-                                sessionId = sessionId,
-                                onSuccess = { Log.d("SalaScreen", "▶ Reproducción iniciada") },
-                                onError = { Log.e("SalaScreen", "❌ Fallo al iniciar reproducción", it) }
-                            )
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+            if (currentlyPlayingPushKey != null) {
+                cancionesEnCola.find { it.pushKey == currentlyPlayingPushKey }?.let { cancionEnCola ->
+                    val video = cancionEnCola.cancion
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFFD32F2F))
+                            .padding(12.dp)
                     ) {
-                        Text("▶ Reproducir Playlist", color = Color.White)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = rememberAsyncImagePainter(video.thumbnailUrl),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp))
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(video.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("Agregado por: ${video.usuario}", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(
+                                text = if (video.duration.startsWith("PT")) formatDuration(video.duration) else video.duration,
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                FirebasePlaybackManager.iniciarReproduccion(
+                                    sessionId = sessionId,
+                                    onSuccess = { Log.d("SalaScreen", "▶ Reproducción iniciada") },
+                                    onError = { Log.e("SalaScreen", "❌ Fallo al iniciar reproducción", it) }
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.25f)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("▶ Reproducir Playlist", color = Color.White)
+                        }
                     }
                 }
             }
@@ -184,26 +182,40 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             Text("En cola:", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (listaFiltrada.isEmpty()) {
+            if (enColaFiltrada.isEmpty()) {
                 Text("No hay canciones en la cola todavía.", color = Color.LightGray)
             } else {
                 LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    itemsIndexed(listaFiltrada, key = { _, it -> it.pushKey }) { i, cancionEnCola ->
+                    itemsIndexed(
+                        items = enColaFiltrada,
+                        key = { idx, cancionEnCola -> "${cancionEnCola.pushKey}-$swipeRefreshId" }
+                    ) { idx, cancionEnCola ->
                         val cancion = cancionEnCola.cancion
+                        val pushKey = cancionEnCola.pushKey
+
+                        val positionInOrder = orderedPushKeys
+                            .filter { it != currentlyPlayingPushKey }
+                            .indexOf(pushKey)
+                        if (positionInOrder == -1) return@itemsIndexed
+
+                        // Solo bloqueamos visualmente el primero, pero todos pueden ser Play Next
+                        val directions = if (positionInOrder == 0) {
+                            setOf(DismissDirection.EndToStart)
+                        } else {
+                            setOf(DismissDirection.StartToEnd, DismissDirection.EndToStart)
+                        }
 
                         val dismissState = rememberDismissState(
                             confirmStateChange = { dismissValue ->
                                 when (dismissValue) {
                                     DismissValue.DismissedToEnd -> {
-                                        if (i > 0) {
-                                            Log.d("SalaScreen", "Solicitando confirmación para Play Next en índice $i")
-                                            mostrarConfirmacionPlayNext = i
+                                        if (positionInOrder != 0) {
+                                            mostrarConfirmacionPlayNext = pushKey
                                         }
                                         false
                                     }
                                     DismissValue.DismissedToStart -> {
-                                        Log.d("SalaScreen", "Solicitando confirmación para eliminar en índice $i")
-                                        mostrarConfirmacionEliminar = i
+                                        mostrarConfirmacionEliminar = pushKey
                                         false
                                     }
                                     else -> false
@@ -211,69 +223,56 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                             }
                         )
 
-                        // --- ALERT PARA PLAY NEXT ---
-                        if (mostrarConfirmacionPlayNext == i) {
+                        if (mostrarConfirmacionPlayNext == pushKey) {
                             AlertDialog(
                                 onDismissRequest = { mostrarConfirmacionPlayNext = null },
                                 title = { Text("¿Enviar al frente?") },
                                 text = { Text("¿Quieres poner esta canción como la siguiente en la cola?") },
                                 confirmButton = {
                                     TextButton(onClick = {
-                                        Log.d("SalaScreen", "Play Next confirmado en índice $i")
                                         FirebaseQueueManager.playNext(
                                             sessionId,
-                                            cancionEnCola.pushKey,
-                                            onSuccess = { respuesta: PlayNextResponse ->
-                                                Log.d("SalaScreen", "Play Next OK: ${respuesta.message}")
+                                            pushKey,
+                                            onSuccess = {
+                                                mostrarConfirmacionPlayNext = null
                                             },
-                                            onError = { error: Throwable ->
-                                                Log.e("SalaScreen", "Error Play Next", error)
+                                            onError = { _ ->
+                                                mostrarConfirmacionPlayNext = null
                                             }
                                         )
-                                        mostrarConfirmacionPlayNext = null
-                                    }) {
-                                        Text("Sí", color = Color(0xFF1976D2))
-                                    }
+                                    }) { Text("Sí", color = Color(0xFF1976D2)) }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { mostrarConfirmacionPlayNext = null }) {
-                                        Text("No")
-                                    }
+                                    TextButton(onClick = { mostrarConfirmacionPlayNext = null }) { Text("No") }
                                 }
                             )
                         }
 
-                        // --- ALERT PARA ELIMINAR ---
-                        if (mostrarConfirmacionEliminar == i) {
+                        if (mostrarConfirmacionEliminar == pushKey) {
                             AlertDialog(
                                 onDismissRequest = { mostrarConfirmacionEliminar = null },
                                 title = { Text("Confirmar eliminación") },
                                 text = { Text("¿Estás seguro de que deseas eliminar esta canción?") },
                                 confirmButton = {
                                     TextButton(onClick = {
-                                        Log.d("SalaScreen", "Eliminación confirmada en índice $i")
                                         mostrarConfirmacionEliminar = null
-                                        FirebaseQueueManager.eliminarCancion(sessionId, cancionEnCola.pushKey)
-                                    }) {
-                                        Text("Eliminar", color = Color.Red)
-                                    }
+                                        FirebaseQueueManager.eliminarCancion(sessionId, pushKey)
+                                    }) { Text("Eliminar", color = Color.Red) }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { mostrarConfirmacionEliminar = null }) {
-                                        Text("Cancelar")
-                                    }
+                                    TextButton(onClick = { mostrarConfirmacionEliminar = null }) { Text("Cancelar") }
                                 }
                             )
                         }
 
                         SwipeToDismiss(
                             state = dismissState,
-                            directions = setOf(DismissDirection.EndToStart, DismissDirection.StartToEnd),
+                            directions = directions,
                             background = {
                                 val direction = dismissState.dismissDirection
                                 when (direction) {
                                     DismissDirection.StartToEnd -> {
-                                        if (i > 0) {
+                                        if (positionInOrder != 0) {
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -393,9 +392,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) {
-                    Text("Cancelar")
-                }
+                TextButton(onClick = { showLogoutDialog = false }) { Text("Cancelar") }
             }
         )
     }

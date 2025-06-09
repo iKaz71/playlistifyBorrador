@@ -6,6 +6,7 @@ import com.kaz.playlistify.api.RetrofitInstance
 import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.model.CancionEnCola
 import com.kaz.playlistify.model.CancionRequest
+import com.kaz.playlistify.model.EliminarCancionRequest
 import com.kaz.playlistify.model.PlayNextRequest
 import com.kaz.playlistify.model.PlayNextResponse
 import kotlinx.coroutines.CoroutineScope
@@ -14,7 +15,10 @@ import kotlinx.coroutines.launch
 
 object FirebaseQueueManager {
 
-    fun escucharColaOrdenada(sessionId: String, onUpdate: (List<CancionEnCola>) -> Unit) {
+    fun escucharColaOrdenada(
+        sessionId: String,
+        onUpdate: (ordered: List<CancionEnCola>, orderedPushKeys: List<String>) -> Unit
+    ) {
         val db = FirebaseDatabase.getInstance()
         val queueRef = db.getReference("queues").child(sessionId)
         val orderRef = db.getReference("queuesOrder").child(sessionId)
@@ -42,7 +46,7 @@ object FirebaseQueueManager {
                             allCanciones[pushKey] = CancionEnCola(pushKey, Cancion(id, titulo, usuario, thumbnailUrl, duration))
                         }
                         val ordered = orderList.mapNotNull { allCanciones[it] }
-                        onUpdate(ordered)
+                        onUpdate(ordered, orderList)
                     }
                     override fun onCancelled(error: DatabaseError) {
                         Log.e("FirebaseQueueManager", "Error leyendo queue: ${error.message}")
@@ -54,6 +58,7 @@ object FirebaseQueueManager {
             }
         })
     }
+
 
     fun escucharPlaybackState(sessionId: String, onUpdate: (Cancion?) -> Unit) {
         val ref = FirebaseDatabase.getInstance()
@@ -123,17 +128,23 @@ object FirebaseQueueManager {
     }
 
     fun eliminarCancion(sessionId: String, pushKey: String) {
-        val queueRef = FirebaseDatabase.getInstance()
-            .getReference("queues")
-            .child(sessionId)
-            .child(pushKey)
-
-        queueRef.removeValue()
-            .addOnSuccessListener {
-                Log.d("FirebaseQueueManager", "✅ Canción eliminada correctamente")
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val body =  EliminarCancionRequest(
+                    sessionId = sessionId,
+                    pushKey = pushKey,
+                    userId = "host" // Por ahora, "host" fijo. Más adelante lo parametrizas.
+                )
+                val response = RetrofitInstance.queueApi.eliminarCancion(body)
+                if (response.isSuccessful) {
+                    Log.d("FirebaseQueueManager", "✅ Canción eliminada correctamente vía backend")
+                } else {
+                    Log.e("FirebaseQueueManager", "❌ Error eliminando canción: HTTP ${response.code()} - ${response.message()}")
+                }
+            } catch (e: Exception) {
+                Log.e("FirebaseQueueManager", "❌ Error al eliminar canción: ${e.message}")
             }
-            .addOnFailureListener {
-                Log.e("FirebaseQueueManager", "❌ Error al eliminar canción", it)
-            }
+        }
     }
+
 }

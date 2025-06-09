@@ -1,6 +1,7 @@
 package com.kaz.playlistify.api
 
 import com.kaz.playlistify.model.CancionRequest
+import com.kaz.playlistify.model.EliminarCancionRequest
 import com.kaz.playlistify.model.PlayNextRequest
 import com.kaz.playlistify.model.PlayNextResponse
 import retrofit2.Response
@@ -17,5 +18,11 @@ interface QueueApi {
     suspend fun playNext(
         @Body body: PlayNextRequest
     ): Response<PlayNextResponse>
+
+    @POST("queue/remove")
+    suspend fun eliminarCancion(
+        @Body body: EliminarCancionRequest
+    ): Response<Unit>
+
 
 }
