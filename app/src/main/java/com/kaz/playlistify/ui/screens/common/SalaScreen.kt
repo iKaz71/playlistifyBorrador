@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -30,19 +31,21 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.google.firebase.database.FirebaseDatabase
 import com.kaz.playlistify.model.Cancion
+import com.kaz.playlistify.model.CancionEnCola
 import com.kaz.playlistify.network.firebase.FirebasePlaybackManager
 import com.kaz.playlistify.network.firebase.FirebaseQueueManager
 import com.kaz.playlistify.ui.screens.components.BusquedaYT
 import com.kaz.playlistify.util.SessionManager
 import com.kaz.playlistify.util.formatDuration
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.PlayArrow
 
-
+import com.kaz.playlistify.model.PlayNextResponse
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
-    val cancionesEnCola = remember { mutableStateListOf<Cancion>() }
+    val cancionesEnCola = remember { mutableStateListOf<CancionEnCola>() }
     val currentVideo = remember { mutableStateOf<Cancion?>(null) }
     val context = LocalContext.current
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -54,11 +57,15 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val rol = remember { mutableStateOf("Anfitrión") }
     val codigoSala = remember { mutableStateOf("----") }
 
+    // Indica si se debe mostrar el dialog de Play Next y en qué índice
+    var mostrarConfirmacionPlayNext by remember { mutableStateOf<Int?>(null) }
+    var mostrarConfirmacionEliminar by remember { mutableStateOf<Int?>(null) }
+
     // 🔄 Escuchar la cola
     LaunchedEffect(sessionId) {
-        FirebaseQueueManager.escucharCola(sessionId) { canciones ->
+        FirebaseQueueManager.escucharColaOrdenada(sessionId) { nuevasCancionesEnCola ->
             cancionesEnCola.clear()
-            cancionesEnCola.addAll(canciones)
+            cancionesEnCola.addAll(nuevasCancionesEnCola)
         }
     }
 
@@ -68,7 +75,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             currentVideo.value = videoActual
         }
     }
-
 
     // 🔐 Obtener código real
     LaunchedEffect(sessionId) {
@@ -106,7 +112,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     ) { padding ->
         val scrollState = rememberScrollState()
-        val listaFiltrada = cancionesEnCola.filter { it.id != currentVideo.value?.id }
+        val listaFiltrada = cancionesEnCola.filter { it.cancion.id != currentVideo.value?.id }
 
         Column(
             modifier = Modifier
@@ -118,7 +124,9 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 }
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text("Código: ${codigoSala.value}", color = Color.White)
@@ -180,55 +188,127 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 Text("No hay canciones en la cola todavía.", color = Color.LightGray)
             } else {
                 LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(listaFiltrada, key = { it.id }) { cancion ->
-                        var mostrarConfirmacion by remember { mutableStateOf(false) }
+                    itemsIndexed(listaFiltrada, key = { _, it -> it.pushKey }) { i, cancionEnCola ->
+                        val cancion = cancionEnCola.cancion
 
-                        if (mostrarConfirmacion) {
+                        val dismissState = rememberDismissState(
+                            confirmStateChange = { dismissValue ->
+                                when (dismissValue) {
+                                    DismissValue.DismissedToEnd -> {
+                                        if (i > 0) {
+                                            Log.d("SalaScreen", "Solicitando confirmación para Play Next en índice $i")
+                                            mostrarConfirmacionPlayNext = i
+                                        }
+                                        false
+                                    }
+                                    DismissValue.DismissedToStart -> {
+                                        Log.d("SalaScreen", "Solicitando confirmación para eliminar en índice $i")
+                                        mostrarConfirmacionEliminar = i
+                                        false
+                                    }
+                                    else -> false
+                                }
+                            }
+                        )
+
+                        // --- ALERT PARA PLAY NEXT ---
+                        if (mostrarConfirmacionPlayNext == i) {
                             AlertDialog(
-                                onDismissRequest = { mostrarConfirmacion = false },
+                                onDismissRequest = { mostrarConfirmacionPlayNext = null },
+                                title = { Text("¿Enviar al frente?") },
+                                text = { Text("¿Quieres poner esta canción como la siguiente en la cola?") },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        Log.d("SalaScreen", "Play Next confirmado en índice $i")
+                                        FirebaseQueueManager.playNext(
+                                            sessionId,
+                                            cancionEnCola.pushKey,
+                                            onSuccess = { respuesta: PlayNextResponse ->
+                                                Log.d("SalaScreen", "Play Next OK: ${respuesta.message}")
+                                            },
+                                            onError = { error: Throwable ->
+                                                Log.e("SalaScreen", "Error Play Next", error)
+                                            }
+                                        )
+                                        mostrarConfirmacionPlayNext = null
+                                    }) {
+                                        Text("Sí", color = Color(0xFF1976D2))
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { mostrarConfirmacionPlayNext = null }) {
+                                        Text("No")
+                                    }
+                                }
+                            )
+                        }
+
+                        // --- ALERT PARA ELIMINAR ---
+                        if (mostrarConfirmacionEliminar == i) {
+                            AlertDialog(
+                                onDismissRequest = { mostrarConfirmacionEliminar = null },
                                 title = { Text("Confirmar eliminación") },
                                 text = { Text("¿Estás seguro de que deseas eliminar esta canción?") },
                                 confirmButton = {
                                     TextButton(onClick = {
-                                        mostrarConfirmacion = false
-                                        FirebaseQueueManager.eliminarCancion(sessionId, cancion.id)
+                                        Log.d("SalaScreen", "Eliminación confirmada en índice $i")
+                                        mostrarConfirmacionEliminar = null
+                                        FirebaseQueueManager.eliminarCancion(sessionId, cancionEnCola.pushKey)
                                     }) {
                                         Text("Eliminar", color = Color.Red)
                                     }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { mostrarConfirmacion = false }) {
+                                    TextButton(onClick = { mostrarConfirmacionEliminar = null }) {
                                         Text("Cancelar")
                                     }
                                 }
                             )
                         }
 
-                        val dismissState = rememberDismissState(
-                            confirmStateChange = { dismissValue ->
-                                if (dismissValue == DismissValue.DismissedToStart) {
-                                    mostrarConfirmacion = true
-                                }
-                                false
-                            }
-                        )
-
                         SwipeToDismiss(
                             state = dismissState,
-                            directions = setOf(DismissDirection.EndToStart),
+                            directions = setOf(DismissDirection.EndToStart, DismissDirection.StartToEnd),
                             background = {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Red)
-                                        .padding(horizontal = 20.dp),
-                                    contentAlignment = Alignment.CenterEnd
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Eliminar canción",
-                                        tint = Color.White
-                                    )
+                                val direction = dismissState.dismissDirection
+                                when (direction) {
+                                    DismissDirection.StartToEnd -> {
+                                        if (i > 0) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(0xFF1976D2))
+                                                    .padding(horizontal = 20.dp),
+                                                contentAlignment = Alignment.CenterStart
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = Icons.Filled.PlayArrow,
+                                                        contentDescription = "Play Next",
+                                                        tint = Color.White
+                                                    )
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("Play Next", color = Color.White, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    DismissDirection.EndToStart -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Red)
+                                                .padding(horizontal = 20.dp),
+                                            contentAlignment = Alignment.CenterEnd
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Eliminar canción",
+                                                tint = Color.White
+                                            )
+                                        }
+                                    }
+                                    else -> {}
                                 }
                             },
                             dismissContent = {
@@ -248,12 +328,21 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                                             Image(
                                                 painter = rememberAsyncImagePainter(cancion.thumbnailUrl),
                                                 contentDescription = null,
-                                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp))
+                                                modifier = Modifier.size(48.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
                                             )
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column(modifier = Modifier.weight(1f)) {
-                                                Text(cancion.title, color = Color.White, maxLines = 1)
-                                                Text("Agregado por: ${cancion.usuario}", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                                                Text(
+                                                    cancion.title,
+                                                    color = Color.White,
+                                                    maxLines = 1
+                                                )
+                                                Text(
+                                                    "Agregado por: ${cancion.usuario}",
+                                                    color = Color.LightGray,
+                                                    style = MaterialTheme.typography.bodySmall
+                                                )
                                             }
                                             Text(
                                                 text = if (cancion.duration.startsWith("PT")) formatDuration(cancion.duration) else cancion.duration,
@@ -311,4 +400,3 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         )
     }
 }
-

@@ -178,12 +178,13 @@ fun BusquedaYT(
                             }
                             IconButton(
                                 onClick = {
-                                    FirebaseQueueManager.agregarCancionAFirebase(sessionId, video)
+                                    FirebaseQueueManager.agregarCancion(sessionId, video)
                                     onCloseSheet()
                                 }
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = "Agregar", tint = Color(0xFFD32F2F))
                             }
+
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
