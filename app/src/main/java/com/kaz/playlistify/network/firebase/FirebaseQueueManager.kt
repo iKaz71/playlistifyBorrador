@@ -60,29 +60,6 @@ object FirebaseQueueManager {
     }
 
 
-    fun escucharPlaybackState(sessionId: String, onUpdate: (Cancion?) -> Unit) {
-        val ref = FirebaseDatabase.getInstance()
-            .getReference("playbackState")
-            .child(sessionId)
-            .child("currentVideo")
-
-        ref.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val id = snapshot.child("id").getValue(String::class.java) ?: return
-                val titulo = snapshot.child("titulo").getValue(String::class.java) ?: ""
-                val usuario = snapshot.child("usuario").getValue(String::class.java) ?: ""
-                val thumbnailUrl = snapshot.child("thumbnailUrl").getValue(String::class.java) ?: ""
-                val duration = snapshot.child("duration").getValue(String::class.java) ?: ""
-
-                onUpdate(Cancion(id, titulo, usuario, thumbnailUrl, duration))
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("FirebaseQueueManager", "❌ Error en playbackState", error.toException())
-            }
-        })
-    }
-
     fun playNext(
         sessionId: String,
         pushKey: String,
