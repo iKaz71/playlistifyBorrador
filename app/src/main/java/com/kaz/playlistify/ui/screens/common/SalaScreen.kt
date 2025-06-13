@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,19 +28,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
-
 import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.model.CancionEnCola
 import com.kaz.playlistify.network.firebase.FirebasePlaybackManager
 import com.kaz.playlistify.network.firebase.FirebaseQueueManager
-import com.kaz.playlistify.ui.screens.components.BusquedaYT
 import com.kaz.playlistify.util.SessionManager
 import com.kaz.playlistify.util.formatDuration
-import kotlinx.coroutines.launch
-import androidx.compose.material.icons.filled.PlayArrow
 import com.google.firebase.database.FirebaseDatabase
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.kaz.playlistify.ui.screens.components.BusquedaYT
+import androidx.compose.ui.unit.sp
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 
-import com.kaz.playlistify.model.PlayNextResponse
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
@@ -49,21 +53,85 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
     val cancionesEnCola = remember { mutableStateListOf<CancionEnCola>() }
     val orderedPushKeys = remember { mutableStateListOf<String>() }
     val currentVideo = remember { mutableStateOf<Cancion?>(null) }
-    val context = LocalContext.current
     var showLogoutDialog by remember { mutableStateOf(false) }
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSheet by remember { mutableStateOf(false) }
     val rol = remember { mutableStateOf("Anfitrión") }
     val codigoSala = remember { mutableStateOf("----") }
 
-    // Estados de confirmación por canción
+
+    // --- Estado de usuario y menú ---
+    val userGoogle = remember { mutableStateOf<GoogleSignInAccount?>(null) }
+    val context = LocalContext.current
+    var nombreUsuario by remember { mutableStateOf(SessionManager.obtenerNombre(context) ?: generarNombreAleatorio()) }
+    var mostrarMenu by remember { mutableStateOf(false) }
+    var mostrarDialogoNombre by remember { mutableStateOf(false) }
+
+    var confirmarCerrarSesionGoogle by remember { mutableStateOf(false) }
+    var confirmarSalirSala by remember { mutableStateOf(false) }
+
+
+    val nombresHawaianos = listOf(
+        "Luau", "Lani", "Moana", "Hoku", "Makani", "Nalu", "Pua", "Lilo", "Koa",
+        "Leilani", "Paniolo", "Honi", "Laka", "Nohea", "Kailani", "Kai",
+        "Aloha", "Keanu", "Mana", "Malie"
+    )
+
+
+// --- Sincronizamos Google automáticamente si hay sesion previa ---
+    LaunchedEffect(Unit) {
+        val cuenta = GoogleSignIn.getLastSignedInAccount(context)
+        if (cuenta != null) {
+            userGoogle.value = cuenta
+
+            val nombreGuardado = SessionManager.obtenerNombre(context)
+            val esNombreAleatorio = nombreGuardado.isNullOrBlank() ||
+                    nombresHawaianos.any { nombreGuardado.startsWith(it) }
+
+            val nuevoNombre = if (esNombreAleatorio) {
+                cuenta.displayName ?: cuenta.email ?: generarNombreAleatorio()
+            } else {
+                nombreGuardado!!
+            }
+
+            nombreUsuario = nuevoNombre
+            SessionManager.guardarNombre(context, nuevoNombre)
+        }
+    }
+
+
+
+    // ---- Estado de confirmación por canción ----
     var mostrarConfirmacionPlayNext by remember { mutableStateOf<String?>(null) }
     var mostrarConfirmacionEliminar by remember { mutableStateOf<String?>(null) }
-
-    // Nueva: Estado para forzar reinicio de swipe
     var swipeRefreshId by remember { mutableStateOf(0) }
 
-    // Escuchamos la cola y el orden REAL de Firebase
+    // --- Launcher para Google SignIn ----
+    val googleSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            userGoogle.value = account
+            // No cambies el nombre personalizado si ya existe, solo si era invitado u otro default
+            if (nombreUsuario.startsWith("Cobalt") || nombreUsuario.startsWith("Solar") ||
+                nombreUsuario.startsWith("Ámbar") || nombreUsuario.startsWith("Fucsia") ||
+                nombreUsuario.startsWith("Coral") || nombreUsuario.startsWith("Turquesa") ||
+                nombreUsuario.isBlank()
+            ) {
+                nombreUsuario = account.displayName ?: account.email ?: generarNombreAleatorio()
+                SessionManager.guardarNombre(context, nombreUsuario)
+            }
+            // Mostrar el Toast SIEMPRE que login sea exitoso
+            Toast.makeText(context, "¡Registro exitoso! Bienvenido/a $nombreUsuario", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e("SalaScreen", "Login Google error", e)
+        }
+    }
+
+
+
+
+    // ---- Lógica de Firebase y datos ----
     LaunchedEffect(sessionId) {
         FirebaseQueueManager.escucharColaOrdenada(sessionId) { nuevasCancionesEnCola, nuevosPushKeys ->
             cancionesEnCola.clear()
@@ -78,7 +146,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             currentVideo.value = videoActual
         }
     }
-    // 🔐 Obtener código real
     LaunchedEffect(sessionId) {
         val ref = FirebaseDatabase.getInstance().getReference("sessions")
         ref.child(sessionId).child("code").get().addOnSuccessListener {
@@ -86,24 +153,81 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Playlistify", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Notificaciones")
-                    }
+                    // Ícono de búsqueda (lupa)
                     IconButton(onClick = { showSheet = true }) {
-                        Icon(Icons.Default.Search, contentDescription = "Buscar")
+                        Icon(Icons.Default.Search, contentDescription = "Buscar en YouTube")
                     }
-                    IconButton(onClick = { showLogoutDialog = true }) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = "Cuenta")
+                    // Box para el menú Anborguesa y dropdown
+                    Box {
+                        IconButton(onClick = { mostrarMenu = true }) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menú")
+                        }
+                        DropdownMenu(
+                            expanded = mostrarMenu,
+                            onDismissRequest = { mostrarMenu = false }
+                        ) {
+                            // Encabezado de usuario y rol
+                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                Text("Usuario: $nombreUsuario", fontWeight = FontWeight.Bold)
+                                Text("Rol: ${rol.value}", color = Color.Gray, fontSize = 14.sp)
+                                userGoogle.value?.email?.let {
+                                    Text(it, color = Color.LightGray, fontSize = 12.sp)
+                                }
+                            }
+                            Divider()
+
+                            DropdownMenuItem(
+                                text = { Text("Cambiar nombre") },
+                                onClick = { mostrarDialogoNombre = true; mostrarMenu = false }
+                            )
+                            if (userGoogle.value == null) {
+                                DropdownMenuItem(
+                                    text = { Text("Iniciar sesión con Google") },
+                                    onClick = {
+                                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                            .requestEmail()
+                                            .build()
+                                        val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                                        val signInIntent = googleSignInClient.signInIntent
+                                        googleSignInLauncher.launch(signInIntent)
+                                        mostrarMenu = false
+                                    }
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text("Escanear QR para ser anfitrión persistente") },
+                                    onClick = {
+                                        // Lógica QR (por implementar)
+                                        mostrarMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Cerrar sesión Google") },
+                                    onClick = {
+                                        confirmarCerrarSesionGoogle = true
+                                        mostrarMenu = false
+                                    }
+                                )
+                            }
+                            Divider()
+                            DropdownMenuItem(
+                                text = { Text("Salir de sala") },
+                                onClick = {
+                                    confirmarSalirSala = true
+                                    mostrarMenu = false
+                                }
+                            )
+                        }
                     }
                 }
             )
         }
+
     ) { padding ->
         val scrollState = rememberScrollState()
         val currentlyPlayingPushKey = orderedPushKeys.firstOrNull()
@@ -115,21 +239,30 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
-                .let { if (enColaFiltrada.size < 3) it.verticalScroll(scrollState) else it }
+                .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
+            // --- Fila bien alineada ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Código: ${codigoSala.value}", color = Color.White)
-                Text("Rol: ${rol.value}", color = Color.White)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Código: ${codigoSala.value}", color = Color.White)
+                }
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                    Text("Usuario: $nombreUsuario", color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
 
+            Spacer(modifier = Modifier.height(6.dp))
+            Divider(color = Color(0x22FFFFFF))
+            Spacer(modifier = Modifier.height(10.dp))
+
             Text("Reproduciendo ahora:", style = MaterialTheme.typography.titleLarge, color = Color.White)
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (currentlyPlayingPushKey != null) {
                 cancionesEnCola.find { it.pushKey == currentlyPlayingPushKey }?.let { cancionEnCola ->
@@ -178,7 +311,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             Text("En cola:", style = MaterialTheme.typography.titleLarge, color = Color.White)
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -198,7 +331,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                             .indexOf(pushKey)
                         if (positionInOrder == -1) return@itemsIndexed
 
-                        // Solo bloqueamos visualmente el primero, pero todos pueden ser Play Next
                         val directions = if (positionInOrder == 0) {
                             setOf(DismissDirection.EndToStart)
                         } else {
@@ -360,6 +492,33 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
+    // Dialogo para cambiar nombre
+    if (mostrarDialogoNombre) {
+        var nuevoNombre by remember { mutableStateOf(nombreUsuario) }
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoNombre = false },
+            title = { Text("Personaliza tu nombre") },
+            text = {
+                TextField(
+                    value = nuevoNombre,
+                    onValueChange = { nuevoNombre = it },
+                    label = { Text("Nombre de usuario") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    nombreUsuario = nuevoNombre.trim().ifEmpty { generarNombreAleatorio() }
+                    SessionManager.guardarNombre(context, nombreUsuario)
+                    mostrarDialogoNombre = false
+                }) { Text("Guardar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoNombre = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // --- Restablece búsqueda de YT con BottomSheet ---
     if (showSheet) {
         ModalBottomSheet(
             onDismissRequest = { showSheet = false },
@@ -376,24 +535,53 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    if (showLogoutDialog) {
+
+    if (confirmarCerrarSesionGoogle) {
         AlertDialog(
-            onDismissRequest = { showLogoutDialog = false },
+            onDismissRequest = { confirmarCerrarSesionGoogle = false },
+            title = { Text("¿Cerrar sesión de Google?") },
+            text = { Text("¿Estás seguro de que quieres cerrar tu sesión de Google?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    GoogleSignIn.getClient(context, GoogleSignInOptions.DEFAULT_SIGN_IN).signOut()
+                    userGoogle.value = null
+                    confirmarCerrarSesionGoogle = false
+                    Toast.makeText(context, "Sesión de Google cerrada.", Toast.LENGTH_SHORT).show()
+                }) { Text("Cerrar sesión") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmarCerrarSesionGoogle = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    if (confirmarSalirSala) {
+        AlertDialog(
+            onDismissRequest = { confirmarSalirSala = false },
+            title = { Text("¿Salir de la sala?") },
             text = { Text("¿Estás seguro de que quieres salir de la sala actual?") },
             confirmButton = {
                 TextButton(onClick = {
                     SessionManager.limpiarSesion(context)
                     onLogout()
-                    showLogoutDialog = false
-                }) {
-                    Icon(Icons.Default.ExitToApp, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Cerrar sesión")
-                }
+                    confirmarSalirSala = false
+                    Toast.makeText(context, "Has salido de la sala.", Toast.LENGTH_SHORT).show()
+                }) { Text("Salir") }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) { Text("Cancelar") }
+                TextButton(onClick = { confirmarSalirSala = false }) { Text("Cancelar") }
             }
         )
     }
 }
+
+fun generarNombreAleatorio(): String {
+    val adj = listOf(
+        "Luau", "Lani", "Moana", "Hoku", "Makani", "Nalu", "Pua", "Lilo", "Koa",
+        "Leilani", "Paniolo", "Honi", "Laka", "Nohea", "Kailani", "Kai",
+        "Aloha", "Keanu", "Mana", "Malie"
+    )
+    val num = (1000..9999).random()
+    return "${adj.random()}$num"
+}
+

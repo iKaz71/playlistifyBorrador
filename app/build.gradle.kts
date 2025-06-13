@@ -103,6 +103,10 @@ dependencies {
     implementation("androidx.compose.material:material:1.6.0")
     implementation("androidx.compose.material3:material3:1.2.0")
 
+    implementation ("com.journeyapps:zxing-android-embedded:4.3.0")
+
+    implementation ("com.google.android.gms:play-services-auth:21.0.0")
+
 
 
 
