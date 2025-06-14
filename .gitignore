@@ -6,6 +6,7 @@
 
 # Configuración local
 local.properties
+gradle.properties
 
 # Archivos de caché del sistema
 .DS_Store
