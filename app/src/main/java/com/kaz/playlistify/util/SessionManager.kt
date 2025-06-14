@@ -8,6 +8,25 @@ object SessionManager {
     private const val SESSION_ID_KEY = "session_id"
     private const val USERNAME_KEY = "nombre_usuario"
 
+    private const val UID_KEY = "uid"
+
+    fun guardarUid(context: Context, uid: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(UID_KEY, uid).apply()
+        Log.d("SessionManager", "💾 UID guardado: $uid")
+    }
+
+    fun obtenerUid(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(UID_KEY, null)
+    }
+
+    fun limpiarUid(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().remove(UID_KEY).apply()
+        Log.d("SessionManager", "🧹 UID eliminado")
+    }
+
     fun guardarSessionId(context: Context, sessionId: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(SESSION_ID_KEY, sessionId).apply()

@@ -6,9 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.DismissDirection
 import androidx.compose.material.DismissValue
 import androidx.compose.material.ExperimentalMaterialApi
@@ -32,8 +30,10 @@ import com.kaz.playlistify.model.Cancion
 import com.kaz.playlistify.model.CancionEnCola
 import com.kaz.playlistify.network.firebase.FirebasePlaybackManager
 import com.kaz.playlistify.network.firebase.FirebaseQueueManager
+import com.kaz.playlistify.network.firebase.UserRepository
 import com.kaz.playlistify.util.SessionManager
 import com.kaz.playlistify.util.formatDuration
+
 import com.google.firebase.database.FirebaseDatabase
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -42,34 +42,63 @@ import com.google.android.gms.common.api.ApiException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.kaz.playlistify.ui.screens.components.BusquedaYT
+import com.kaz.playlistify.ui.screens.components.QRScanner
+import kotlinx.coroutines.launch
+import com.kaz.playlistify.api.PlaylistifyApi
+import com.kaz.playlistify.api.RetrofitInstance
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import com.kaz.playlistify.BuildConfig
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+
+
+
+
+
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
-fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
+fun SalaScreen(
+    sessionId: String,
+    onLogout: () -> Unit = {}
+) {
     val cancionesEnCola = remember { mutableStateListOf<CancionEnCola>() }
     val orderedPushKeys = remember { mutableStateListOf<String>() }
     val currentVideo = remember { mutableStateOf<Cancion?>(null) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSheet by remember { mutableStateOf(false) }
-    val rol = remember { mutableStateOf("Anfitrión") }
+    val rol = remember { mutableStateOf("Invitado") }
     val codigoSala = remember { mutableStateOf("----") }
 
-
-    // --- Estado de usuario y menú ---
     val userGoogle = remember { mutableStateOf<GoogleSignInAccount?>(null) }
     val context = LocalContext.current
     var nombreUsuario by remember { mutableStateOf(SessionManager.obtenerNombre(context) ?: generarNombreAleatorio()) }
     var mostrarMenu by remember { mutableStateOf(false) }
     var mostrarDialogoNombre by remember { mutableStateOf(false) }
-
     var confirmarCerrarSesionGoogle by remember { mutableStateOf(false) }
     var confirmarSalirSala by remember { mutableStateOf(false) }
+    var mostrarEscanerQR by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
+    // ---- Permiso cámara ----
+    var solicitarPermisoCamara by remember { mutableStateOf(false) }
+    var permisoCamaraConcedido by remember { mutableStateOf(false) }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        permisoCamaraConcedido = isGranted
+        if (isGranted) {
+            mostrarEscanerQR = true
+        } else {
+            Toast.makeText(context, "Se requiere permiso de cámara para escanear QR", Toast.LENGTH_LONG).show()
+        }
+        solicitarPermisoCamara = false
+    }
 
     val nombresHawaianos = listOf(
         "Luau", "Lani", "Moana", "Hoku", "Makani", "Nalu", "Pua", "Lilo", "Koa",
@@ -77,68 +106,108 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         "Aloha", "Keanu", "Mana", "Malie"
     )
 
-
-// --- Sincronizamos Google automáticamente si hay sesion previa ---
+    // Google sign-in setup
     LaunchedEffect(Unit) {
         val cuenta = GoogleSignIn.getLastSignedInAccount(context)
         if (cuenta != null) {
             userGoogle.value = cuenta
-
             val nombreGuardado = SessionManager.obtenerNombre(context)
             val esNombreAleatorio = nombreGuardado.isNullOrBlank() ||
                     nombresHawaianos.any { nombreGuardado.startsWith(it) }
-
             val nuevoNombre = if (esNombreAleatorio) {
                 cuenta.displayName ?: cuenta.email ?: generarNombreAleatorio()
             } else {
                 nombreGuardado!!
             }
-
             nombreUsuario = nuevoNombre
             SessionManager.guardarNombre(context, nuevoNombre)
+
+            val firebaseUser = FirebaseAuth.getInstance().currentUser
+            firebaseUser?.uid?.let { SessionManager.guardarUid(context, it) }
         }
     }
 
+    // Registrar usuario en la sesión cada vez que entramos
+    LaunchedEffect(sessionId, nombreUsuario) {
+        val uid = SessionManager.obtenerUid(context)
+            ?: FirebaseAuth.getInstance().currentUser?.uid
+            ?: return@LaunchedEffect // Si no hay UID, no seguimos (no usar nombre)
+        coroutineScope.launch {
+            val res = UserRepository.registrarUsuarioEnSesion(
+                sessionId = sessionId,
+                uid = uid,
+                nombre = nombreUsuario,
+                dispositivo = "android",
+                rol = "invitado",
+                api = RetrofitInstance.playlistifyApi
+            )
+            if (res.isFailure) {
+                Log.e("SalaScreen", "Registro usuario fallido: ${res.exceptionOrNull()?.message}")
+            }
+        }
+    }
 
-
-    // ---- Estado de confirmación por canción ----
     var mostrarConfirmacionPlayNext by remember { mutableStateOf<String?>(null) }
     var mostrarConfirmacionEliminar by remember { mutableStateOf<String?>(null) }
     var swipeRefreshId by remember { mutableStateOf(0) }
 
-    // --- Launcher para Google SignIn ----
     val googleSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
             userGoogle.value = account
-            // No cambies el nombre personalizado si ya existe, solo si era invitado u otro default
-            if (nombreUsuario.startsWith("Cobalt") || nombreUsuario.startsWith("Solar") ||
-                nombreUsuario.startsWith("Ámbar") || nombreUsuario.startsWith("Fucsia") ||
-                nombreUsuario.startsWith("Coral") || nombreUsuario.startsWith("Turquesa") ||
-                nombreUsuario.isBlank()
-            ) {
+            val esNombreProvisional = nombreUsuario.isBlank() || nombresHawaianos.any { nombreUsuario.startsWith(it) }
+            if (esNombreProvisional) {
                 nombreUsuario = account.displayName ?: account.email ?: generarNombreAleatorio()
                 SessionManager.guardarNombre(context, nombreUsuario)
             }
-            // Mostrar el Toast SIEMPRE que login sea exitoso
-            Toast.makeText(context, "¡Registro exitoso! Bienvenido/a $nombreUsuario", Toast.LENGTH_SHORT).show()
+
+            // --- 🔥 Autenticar con Firebase y guardar UID ---
+            val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+            FirebaseAuth.getInstance().signInWithCredential(credential)
+                .addOnCompleteListener { authResult ->
+                    if (authResult.isSuccessful) {
+                        val firebaseUser = FirebaseAuth.getInstance().currentUser
+                        firebaseUser?.uid?.let { SessionManager.guardarUid(context, it) }
+                        Toast.makeText(context, "¡Registro exitoso! Bienvenido/a $nombreUsuario", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Error autenticando con Firebase", Toast.LENGTH_SHORT).show()
+                    }
+                }
         } catch (e: Exception) {
             Log.e("SalaScreen", "Login Google error", e)
+            Toast.makeText(context, "Error en login de Google: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
+    // Escuchar rol con DisposableEffect (en vivo)
+    DisposableEffect(sessionId) {
+        val usuariosRef = FirebaseDatabase.getInstance().getReference("sessions/$sessionId/usuarios")
+        val uidActual = SessionManager.obtenerUid(context)
 
+        val listener = object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val usuarios = snapshot.value as? Map<*, *>
+                val usuarioActual = usuarios?.get(uidActual) as? Map<*, *>
+                rol.value = (usuarioActual?.get("rol") as? String)?.replaceFirstChar { it.uppercase() } ?: "Invitado"
+            }
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                Log.e("SalaScreen", "Error al leer usuarios: ${error.message}")
+            }
+        }
 
+        usuariosRef.addValueEventListener(listener)
+        onDispose { usuariosRef.removeEventListener(listener) }
+    }
 
-    // ---- Lógica de Firebase y datos ----
+    // Sincronizar cola ordenada y playback
     LaunchedEffect(sessionId) {
         FirebaseQueueManager.escucharColaOrdenada(sessionId) { nuevasCancionesEnCola, nuevosPushKeys ->
             cancionesEnCola.clear()
             cancionesEnCola.addAll(nuevasCancionesEnCola)
             orderedPushKeys.clear()
             orderedPushKeys.addAll(nuevosPushKeys)
-            swipeRefreshId++ // Forzar recomposición de todos los swipe states
+            swipeRefreshId++
         }
     }
     LaunchedEffect(sessionId) {
@@ -153,16 +222,27 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
+    // --- Bloque para pedir permiso y mostrar escáner ---
+    if (solicitarPermisoCamara) {
+        val permissionCheck = ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA)
+        if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+            mostrarEscanerQR = true
+            solicitarPermisoCamara = false
+        } else {
+            LaunchedEffect(Unit) {
+                cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Playlistify", fontWeight = FontWeight.Bold) },
                 actions = {
-                    // Ícono de búsqueda (lupa)
                     IconButton(onClick = { showSheet = true }) {
                         Icon(Icons.Default.Search, contentDescription = "Buscar en YouTube")
                     }
-                    // Box para el menú Anborguesa y dropdown
                     Box {
                         IconButton(onClick = { mostrarMenu = true }) {
                             Icon(Icons.Default.Menu, contentDescription = "Menú")
@@ -171,7 +251,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                             expanded = mostrarMenu,
                             onDismissRequest = { mostrarMenu = false }
                         ) {
-                            // Encabezado de usuario y rol
                             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                                 Text("Usuario: $nombreUsuario", fontWeight = FontWeight.Bold)
                                 Text("Rol: ${rol.value}", color = Color.Gray, fontSize = 14.sp)
@@ -180,7 +259,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                                 }
                             }
                             Divider()
-
                             DropdownMenuItem(
                                 text = { Text("Cambiar nombre") },
                                 onClick = { mostrarDialogoNombre = true; mostrarMenu = false }
@@ -190,8 +268,10 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                                     text = { Text("Iniciar sesión con Google") },
                                     onClick = {
                                         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                            .requestIdToken(BuildConfig.GOOGLE_CLIENT_ID)
                                             .requestEmail()
                                             .build()
+                                        Log.d("GoogleClientID", BuildConfig.GOOGLE_CLIENT_ID)
                                         val googleSignInClient = GoogleSignIn.getClient(context, gso)
                                         val signInIntent = googleSignInClient.signInIntent
                                         googleSignInLauncher.launch(signInIntent)
@@ -202,10 +282,17 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                                 DropdownMenuItem(
                                     text = { Text("Escanear QR para ser anfitrión persistente") },
                                     onClick = {
-                                        // Lógica QR (por implementar)
+                                        // Revisar permiso antes de pedirlo
+                                        val tienePermiso = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                                        if (tienePermiso) {
+                                            mostrarEscanerQR = true
+                                        } else {
+                                            solicitarPermisoCamara = true
+                                        }
                                         mostrarMenu = false
                                     }
                                 )
+
                                 DropdownMenuItem(
                                     text = { Text("Cerrar sesión Google") },
                                     onClick = {
@@ -227,9 +314,7 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 }
             )
         }
-
     ) { padding ->
-        val scrollState = rememberScrollState()
         val currentlyPlayingPushKey = orderedPushKeys.firstOrNull()
         val enColaFiltrada = orderedPushKeys
             .filter { it != currentlyPlayingPushKey }
@@ -241,7 +326,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
                 .padding(padding)
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            // --- Fila bien alineada ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -492,7 +576,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         }
     }
 
-    // Dialogo para cambiar nombre
     if (mostrarDialogoNombre) {
         var nuevoNombre by remember { mutableStateOf(nombreUsuario) }
         AlertDialog(
@@ -518,7 +601,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
         )
     }
 
-    // --- Restablece búsqueda de YT con BottomSheet ---
     if (showSheet) {
         ModalBottomSheet(
             onDismissRequest = { showSheet = false },
@@ -534,7 +616,6 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             )
         }
     }
-
 
     if (confirmarCerrarSesionGoogle) {
         AlertDialog(
@@ -573,6 +654,45 @@ fun SalaScreen(sessionId: String, onLogout: () -> Unit = {}) {
             }
         )
     }
+
+    // Mostrar el scanner si el flag está activo
+    if (mostrarEscanerQR) {
+        QRScanner(
+            onResult = { qrContent ->
+                mostrarEscanerQR = false
+                if (qrContent == sessionId) {
+                    val uid = SessionManager.obtenerUid(context)
+                        ?: FirebaseAuth.getInstance().currentUser?.uid
+                    if (uid.isNullOrEmpty()) {
+                        Toast.makeText(
+                            context,
+                            "Inicia sesión con Google antes de ascender a anfitrión.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        return@QRScanner
+                    }
+                    coroutineScope.launch {
+                        val result = UserRepository.ascenderAAnfitrionPersistente(
+                            sessionId,
+                            uid,
+                            RetrofitInstance.playlistifyApi
+                        )
+                        result.onSuccess {
+                            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                        }.onFailure {
+                            Toast.makeText(context, it.message ?: "Error desconocido", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } else {
+                    Toast.makeText(context, "QR inválido", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onCancel = {
+                mostrarEscanerQR = false
+            }
+        )
+    }
+
 }
 
 fun generarNombreAleatorio(): String {
@@ -584,4 +704,5 @@ fun generarNombreAleatorio(): String {
     val num = (1000..9999).random()
     return "${adj.random()}$num"
 }
+
 

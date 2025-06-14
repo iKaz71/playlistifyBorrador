@@ -31,4 +31,13 @@ object RetrofitInstance {
             .build()
             .create(QueueApi::class.java)
     }
+
+    val playlistifyApi: PlaylistifyApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .client(client)
+            .build()
+            .create(PlaylistifyApi::class.java)
+    }
 }

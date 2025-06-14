@@ -38,7 +38,8 @@ object FirebaseQueueManager {
                         val allCanciones = mutableMapOf<String, CancionEnCola>()
                         queueSnap.children.forEach { child ->
                             val id = child.child("id").getValue(String::class.java) ?: return@forEach
-                            val titulo = child.child("titulo").getValue(String::class.java) ?: ""
+                            val titulo = child.child("title").getValue(String::class.java)
+                                ?: child.child("titulo").getValue(String::class.java) ?: ""
                             val usuario = child.child("usuario").getValue(String::class.java) ?: ""
                             val thumbnailUrl = child.child("thumbnailUrl").getValue(String::class.java) ?: ""
                             val duration = child.child("duration").getValue(String::class.java) ?: ""
@@ -58,7 +59,6 @@ object FirebaseQueueManager {
             }
         })
     }
-
 
     fun playNext(
         sessionId: String,
@@ -123,5 +123,4 @@ object FirebaseQueueManager {
             }
         }
     }
-
 }
