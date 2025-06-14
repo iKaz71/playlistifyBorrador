@@ -17,7 +17,7 @@ object UserRepository {
                 sessionId = sessionId,
                 uid = uid,
                 body = CambiarRolRequest(
-                    rol = "anfitrion_persistente",
+                    rol = "admin",
                     adminUid = uid // El usuario que hace la petición
                 )
             )
@@ -35,7 +35,7 @@ object UserRepository {
             // Si el body indica que no fue exitoso
             val responseBody = response.body()
             if (responseBody?.ok == true) {
-                return Result.success("¡Ya eres anfitrión persistente!")
+                return Result.success("¡Ya eres admin!")
             } else {
                 val backendMsg = responseBody?.message ?: "Respuesta inesperada del backend"
                 Log.e("UserRepository", "Mensaje del backend: $backendMsg")

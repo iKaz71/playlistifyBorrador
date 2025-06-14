@@ -111,19 +111,27 @@ fun SalaScreen(
         val uid = SessionManager.obtenerUid(context)
             ?: FirebaseAuth.getInstance().currentUser?.uid
             ?: return@LaunchedEffect
-        coroutineScope.launch {
-            val res = UserRepository.registrarUsuarioEnSesion(
-                sessionId = sessionId,
-                uid = uid,
-                nombre = nombreUsuario,
-                dispositivo = "android",
-                rol = "invitado",
-                api = RetrofitInstance.playlistifyApi
-            )
-            if (res.isFailure) {
-                Log.e("SalaScreen", "Registro usuario fallido: ${res.exceptionOrNull()?.message}")
+        val ref = FirebaseDatabase.getInstance().getReference("sessions/$sessionId/usuarios/$uid")
+        ref.get().addOnSuccessListener { snapshot ->
+            val data = snapshot.value as? Map<*, *>
+            val rolActual = data?.get("rol") as? String ?: "invitado"
+            val rolFinal = if (rolActual == "admin") "admin" else "invitado"
+
+            coroutineScope.launch {
+                val res = UserRepository.registrarUsuarioEnSesion(
+                    sessionId = sessionId,
+                    uid = uid,
+                    nombre = nombreUsuario,
+                    dispositivo = "android",
+                    rol = rolFinal,
+                    api = RetrofitInstance.playlistifyApi
+                )
+                if (res.isFailure) {
+                    Log.e("SalaScreen", "Registro usuario fallido: ${res.exceptionOrNull()?.message}")
+                }
             }
         }
+
     }
 
     val googleSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -227,11 +235,16 @@ fun SalaScreen(
                     }
                 } else null,
                 onEscanearQR = {
-                    val tienePermiso = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                    if (tienePermiso) {
-                        mostrarEscanerQR = true
+                    // La variable `rol.value` ya la tienes en tu estado
+                    if (rol.value.equals("admin", ignoreCase = true)) {
+                        Toast.makeText(context, "Ya eres Admin, no puedes escanear otro código.", Toast.LENGTH_LONG).show()
                     } else {
-                        solicitarPermisoCamara = true
+                        val tienePermiso = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                        if (tienePermiso) {
+                            mostrarEscanerQR = true
+                        } else {
+                            solicitarPermisoCamara = true
+                        }
                     }
                 },
                 onCerrarSesion = { confirmarCerrarSesionGoogle = true },

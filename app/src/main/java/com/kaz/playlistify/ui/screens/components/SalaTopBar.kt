@@ -60,7 +60,7 @@ fun SalaTopBar(
                         )
                     } else {
                         DropdownMenuItem(
-                            text = { Text("Escanear QR para ser anfitrión persistente") },
+                            text = { Text("Escanear QR para ser Admin") },
                             onClick = { onEscanearQR?.invoke(); onDismissMenu() }
                         )
                         DropdownMenuItem(
