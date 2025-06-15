@@ -33,7 +33,6 @@ import android.widget.Toast
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import android.content.pm.PackageManager
-import androidx.compose.material.icons.Icons
 import androidx.core.content.ContextCompat
 import com.kaz.playlistify.ui.screens.components.ColaDeCanciones
 import com.kaz.playlistify.ui.screens.components.ConfirmDialog
@@ -41,8 +40,9 @@ import com.kaz.playlistify.ui.screens.components.NowPlayingCard
 import com.kaz.playlistify.util.generarNombreAleatorio
 import com.kaz.playlistify.ui.screens.components.SalaTopBar
 import com.kaz.playlistify.util.NombreDialog
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.ui.unit.sp
+import com.kaz.playlistify.ui.screens.components.MenuBottomSheet
+import com.kaz.playlistify.BuildConfig
+
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
@@ -58,18 +58,17 @@ fun SalaScreen(
     var showSheet by remember { mutableStateOf(false) }
     val rol = remember { mutableStateOf("Invitado") }
     val codigoSala = remember { mutableStateOf("----") }
-
+    val showMenuSheet = remember { mutableStateOf(false) }
     val userGoogle = remember { mutableStateOf<GoogleSignInAccount?>(null) }
     val context = LocalContext.current
     var nombreUsuario by remember { mutableStateOf(SessionManager.obtenerNombre(context) ?: generarNombreAleatorio()) }
-    var mostrarMenu by remember { mutableStateOf(false) }
     var mostrarDialogoNombre by remember { mutableStateOf(false) }
     var confirmarCerrarSesionGoogle by remember { mutableStateOf(false) }
     var confirmarSalirSala by remember { mutableStateOf(false) }
     var mostrarEscanerQR by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var swipeRefreshId by remember { mutableStateOf(0) }
-    val showMenuSheet = remember { mutableStateOf(false) }
+
 
 
     // Permiso cámara
@@ -305,49 +304,28 @@ fun SalaScreen(
         }
     )
 
-    if (showMenuSheet.value) {
-        ModalBottomSheet(
-            onDismissRequest = { showMenuSheet.value = false },
-            containerColor = Color(0xFF202124),
-            tonalElevation = 8.dp,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            dragHandle = null
-        ) {
-            // HEADER: Usuario + botón cerrar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(nombreUsuario, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 18.sp, color = Color.White)
-                    Text(rol.value, color = Color(0xFFAAAAAA), fontSize = 14.sp)
-                    userGoogle.value?.email?.let {
-                        Text(it, color = Color(0xFFBBBBBB), fontSize = 13.sp)
-                    }
-                }
-                IconButton(onClick = { showMenuSheet.value = false }) {
-                    Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
-                }
+    MenuBottomSheet(
+        visible = showMenuSheet.value,
+        nombreUsuario = nombreUsuario,
+        rol = rol.value,
+        emailUsuario = userGoogle.value?.email,
+        onDismiss = { showMenuSheet.value = false },
+        onCambiarNombre = { mostrarDialogoNombre = true },
+        onLoginGoogle = if (userGoogle.value == null) {
+            {
+                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(BuildConfig.GOOGLE_CLIENT_ID)
+                    .requestEmail()
+                    .build()
+                val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                val signInIntent = googleSignInClient.signInIntent
+                googleSignInLauncher.launch(signInIntent)
             }
-
-            Divider(color = Color(0x22FFFFFF))
-
-            MenuItem("Cambiar nombre") { mostrarDialogoNombre = true; showMenuSheet.value = false }
-            if (userGoogle.value == null) {
-                MenuItem("Iniciar sesión con Google") { /* Llama login Google aquí */ showMenuSheet.value = false }
-            } else {
-                MenuItem("Escanear QR para ser Admin") { mostrarEscanerQR = true; showMenuSheet.value = false }
-                MenuItem("Cerrar sesión Google") { confirmarCerrarSesionGoogle = true; showMenuSheet.value = false }
-            }
-            Divider(color = Color(0x22FFFFFF))
-            MenuItem("Salir de sala", color = Color.Red) { confirmarSalirSala = true; showMenuSheet.value = false }
-
-            Spacer(Modifier.height(12.dp))
-        }
-    }
+        } else null,
+        onEscanearQR = if (userGoogle.value != null) { { mostrarEscanerQR = true } } else null,
+        onCerrarSesion = if (userGoogle.value != null) { { confirmarCerrarSesionGoogle = true } } else null,
+        onSalirSala = { confirmarSalirSala = true }
+    )
 
     if (showSheet) {
         ModalBottomSheet(
@@ -430,21 +408,6 @@ fun SalaScreen(
     }
 }
 
-// Composable utilitario para los items de menú
-@Composable
-fun MenuItem(
-    text: String,
-    color: Color = Color.White,
-    onClick: () -> Unit
-) {
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-    ) {
-        Text(text, color = color, fontSize = 16.sp)
-    }
-}
+
 
 
