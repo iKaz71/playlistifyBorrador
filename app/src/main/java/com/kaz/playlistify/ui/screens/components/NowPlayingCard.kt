@@ -61,7 +61,7 @@ fun NowPlayingCard(
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
-        if (onPlayClick != null) {
+        /*if (onPlayClick != null) {
             Button(
                 onClick = onPlayClick,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.25f)),
@@ -70,6 +70,6 @@ fun NowPlayingCard(
             ) {
                 Text("▶ Reproducir Playlist", color = Color.White)
             }
-        }
+        }*/
     }
 }

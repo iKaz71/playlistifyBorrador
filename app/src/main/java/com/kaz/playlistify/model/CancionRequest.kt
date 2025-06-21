@@ -6,7 +6,8 @@ data class CancionRequest(
     val titulo: String,
     val usuario: String,
     val thumbnailUrl: String,
-    val duration: String
+    val duration: String,
+    val uid: String
 )
 
 

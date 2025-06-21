@@ -12,6 +12,8 @@ import com.kaz.playlistify.model.PlayNextResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import android.content.Context
+import com.kaz.playlistify.util.SessionManager
 
 object FirebaseQueueManager {
 
@@ -81,16 +83,18 @@ object FirebaseQueueManager {
         }
     }
 
-    fun agregarCancion(sessionId: String, cancion: Cancion) {
+    fun agregarCancion(context: Context, sessionId: String, cancion: Cancion) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val uid = SessionManager.obtenerUid(context) ?: ""
                 val body = CancionRequest(
                     sessionId = sessionId,
                     id = cancion.id,
                     titulo = cancion.title,
                     usuario = cancion.usuario,
                     thumbnailUrl = cancion.thumbnailUrl,
-                    duration = cancion.duration
+                    duration = cancion.duration,
+                    uid = uid   // Ahora sí lo mandas
                 )
                 val response = RetrofitInstance.queueApi.agregarCancion(body)
                 if (response.isSuccessful) {

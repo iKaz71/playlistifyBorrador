@@ -39,6 +39,11 @@ import com.kaz.playlistify.util.formatDuration
 import kotlinx.coroutines.launch
 import androidx.compose.material3.SheetState
 import kotlinx.coroutines.delay
+import androidx.compose.ui.platform.LocalContext
+
+
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +52,8 @@ fun BusquedaYT(
     bottomSheetState: SheetState,
     onCloseSheet: () -> Unit
 ) {
+    val context = LocalContext.current
+
     var query by remember { mutableStateOf(TextFieldValue()) }
     var resultados by remember { mutableStateOf(listOf<Cancion>()) }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -178,7 +185,7 @@ fun BusquedaYT(
                             }
                             IconButton(
                                 onClick = {
-                                    FirebaseQueueManager.agregarCancion(sessionId, video)
+                                    FirebaseQueueManager.agregarCancion(context, sessionId, video)
                                     onCloseSheet()
                                 }
                             ) {
