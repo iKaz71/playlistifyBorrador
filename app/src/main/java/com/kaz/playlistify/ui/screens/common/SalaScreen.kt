@@ -322,10 +322,16 @@ fun SalaScreen(
                 googleSignInLauncher.launch(signInIntent)
             }
         } else null,
-        onEscanearQR = if (userGoogle.value != null) { { mostrarEscanerQR = true } } else null,
+        onEscanearQR = if (
+            userGoogle.value != null &&
+            rol.value.lowercase() == "invitado"
+        ) {
+            { mostrarEscanerQR = true }
+        } else null,
         onCerrarSesion = if (userGoogle.value != null) { { confirmarCerrarSesionGoogle = true } } else null,
         onSalirSala = { confirmarSalirSala = true }
     )
+
 
     if (showSheet) {
         ModalBottomSheet(

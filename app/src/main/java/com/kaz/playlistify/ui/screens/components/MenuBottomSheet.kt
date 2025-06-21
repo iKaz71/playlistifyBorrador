@@ -59,10 +59,15 @@ fun MenuBottomSheet(
         MenuItem("Cambiar nombre") { onCambiarNombre(); onDismiss() }
         if (onLoginGoogle != null) {
             MenuItem("Iniciar sesión con Google") { onLoginGoogle(); onDismiss() }
-        } else {
-            MenuItem("Escanear QR para ser Admin") { onEscanearQR?.invoke(); onDismiss() }
-            MenuItem("Cerrar sesión Google") { onCerrarSesion?.invoke(); onDismiss() }
         }
+
+        if (onEscanearQR != null) {
+            MenuItem("Escanear QR para ser Admin") { onEscanearQR(); onDismiss() }
+        }
+        if (onCerrarSesion != null) {
+            MenuItem("Cerrar sesión Google") { onCerrarSesion(); onDismiss() }
+        }
+
         Divider(color = Color(0x22FFFFFF))
         MenuItem("Salir de sala", color = Color.Red) { onSalirSala(); onDismiss() }
 
