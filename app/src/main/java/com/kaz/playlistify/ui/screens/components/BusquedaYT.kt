@@ -40,9 +40,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.material3.SheetState
 import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalContext
-
-
-
+import com.kaz.playlistify.util.SessionManager
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +51,7 @@ fun BusquedaYT(
     onCloseSheet: () -> Unit
 ) {
     val context = LocalContext.current
+    val nombreUsuario = remember { SessionManager.obtenerNombre(context) ?: "Invitado" }
 
     var query by remember { mutableStateOf(TextFieldValue()) }
     var resultados by remember { mutableStateOf(listOf<Cancion>()) }
@@ -91,7 +90,7 @@ fun BusquedaYT(
                             title = it.title,
                             thumbnailUrl = "https://i.ytimg.com/vi/${it.id}/hqdefault.jpg",
                             duration = formatDuration(it.duration),
-                            usuario = "demo_user"
+                            usuario = nombreUsuario
                         )
                     }
                 },

@@ -4,6 +4,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,11 +55,32 @@ fun QueueItem(
                         overflow = TextOverflow.Ellipsis,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
+                    /*Text(
                         "Agregado por: ${cancion.usuario}",
                         color = Color.LightGray,
                         style = MaterialTheme.typography.bodySmall
-                    )
+                    )*/
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(Color(0xFF3A3A3A), shape = RoundedCornerShape(10.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Agregado por",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            cancion.usuario,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1
+                        )
+                    }
                 }
                 Text(
                     // Si la duración está en formato ISO "PT3M30S", la formatea; si no, la muestra tal cual.
