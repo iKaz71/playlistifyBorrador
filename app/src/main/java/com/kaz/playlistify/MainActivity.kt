@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.ActivityCompat
 import com.google.firebase.FirebaseApp
 import com.kaz.playlistify.api.RetrofitInstance
@@ -18,18 +19,12 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
-    private fun solicitarPermisosUbicacion() {
-        val permisos = arrayOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
-        ActivityCompat.requestPermissions(this, permisos, 1)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
         super.onCreate(savedInstanceState)
         FirebaseApp.initializeApp(this)
-        solicitarPermisosUbicacion()
+
 
         setContent {
             PlaylistifyTheme {
