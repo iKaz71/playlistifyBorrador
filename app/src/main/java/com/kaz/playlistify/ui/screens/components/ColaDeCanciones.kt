@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kaz.playlistify.model.CancionEnCola
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
@@ -120,6 +122,7 @@ fun ColaDeCanciones(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
+                                            .clip(RoundedCornerShape(16.dp))
                                             .background(Color(0xFF1976D2))
                                             .padding(horizontal = 20.dp),
                                         contentAlignment = Alignment.CenterStart
@@ -140,6 +143,7 @@ fun ColaDeCanciones(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
+                                        .clip(RoundedCornerShape(16.dp))
                                         .background(Color.Red)
                                         .padding(horizontal = 20.dp),
                                     contentAlignment = Alignment.CenterEnd

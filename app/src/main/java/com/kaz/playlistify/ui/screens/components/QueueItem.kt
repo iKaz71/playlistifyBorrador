@@ -29,7 +29,7 @@ fun QueueItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.Black)
+
     ) {
         Column(
             modifier = Modifier
