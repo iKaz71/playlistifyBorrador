@@ -102,7 +102,7 @@ fun BusquedaYT(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
     ) {
         Text(
