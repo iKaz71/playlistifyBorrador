@@ -42,13 +42,14 @@ import com.kaz.playlistify.ui.screens.components.SalaTopBar
 import com.kaz.playlistify.util.NombreDialog
 import com.kaz.playlistify.ui.screens.components.MenuBottomSheet
 import com.kaz.playlistify.BuildConfig
-
+import com.kaz.playlistify.util.NetworkStatus
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun SalaScreen(
     sessionId: String,
+    isOnline: Boolean,
     onLogout: () -> Unit = {}
 ) {
     val cancionesEnCola = remember { mutableStateListOf<CancionEnCola>() }
@@ -217,9 +218,11 @@ fun SalaScreen(
 
     Scaffold(
         topBar = {
+            val networkStatus = null
             SalaTopBar(
                 onBuscarClick = { showSheet = true },
-                onMenuClick = { showMenuSheet.value = true }
+                onMenuClick = { showMenuSheet.value = true },
+                isOnline = isOnline
             )
         }
     ) { padding ->

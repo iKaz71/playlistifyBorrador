@@ -101,7 +101,8 @@ fun BusquedaYT(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .heightIn(max = 480.dp)
             .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
     ) {

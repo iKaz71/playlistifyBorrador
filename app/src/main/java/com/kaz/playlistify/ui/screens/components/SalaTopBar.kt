@@ -20,7 +20,8 @@ import com.kaz.playlistify.R
 @Composable
 fun SalaTopBar(
     onBuscarClick: () -> Unit,
-    onMenuClick: () -> Unit
+    onMenuClick: () -> Unit,
+    isOnline: Boolean
 ) {
     TopAppBar(
         title = {
@@ -41,7 +42,7 @@ fun SalaTopBar(
             }
         },
         actions = {
-            IconButton(onClick = onBuscarClick) {
+            IconButton(onClick = onBuscarClick,enabled = isOnline ) {
                 Icon(Icons.Default.Search, contentDescription = "Buscar en YouTube", tint = Color.White)
             }
             IconButton(onClick = onMenuClick) {
