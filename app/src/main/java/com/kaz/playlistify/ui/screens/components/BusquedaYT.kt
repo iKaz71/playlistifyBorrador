@@ -117,7 +117,7 @@ fun BusquedaYT(
                 query = it
                 if (resultados.isNotEmpty()) resultados = emptyList()
             },
-            placeholder = { Text("Ej: Dido", color = Color.Gray) },
+            placeholder = { Text("", color = Color.Gray) },
             trailingIcon = {
                 IconButton(onClick = { ejecutarBusqueda() }) {
                     Icon(Icons.Default.Search, contentDescription = "Buscar", tint = Color(0xFFD32F2F))
